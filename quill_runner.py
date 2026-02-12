@@ -218,12 +218,20 @@ def _import_docx_renderer():
     return mod.DocxRenderer
 
 
-def render_docx(markdown_text: str, output_path: str) -> Optional[str]:
-    """将 Markdown 文本渲染为 .docx"""
+def render_docx(markdown_text: str, output_path: str, image_paths: Optional[List[str]] = None) -> Optional[str]:
+    """将 Markdown 文本渲染为 .docx，可选插入图片"""
     try:
         DocxRenderer = _import_docx_renderer()
         renderer = DocxRenderer()
         renderer.render_from_markdown(markdown_text)
+
+        # 插入图片（封面图 + 数据图 + 关系图）
+        if image_paths:
+            valid_images = [p for p in image_paths if Path(p).exists()]
+            if valid_images:
+                renderer.insert_images(valid_images)
+                logger.info(f"已插入 {len(valid_images)} 张图片到 DOCX")
+
         renderer.save(output_path)
         return output_path
 
@@ -232,9 +240,9 @@ def render_docx(markdown_text: str, output_path: str) -> Optional[str]:
         return None
 
 
-def run_quill(date_str: Optional[str] = None) -> Optional[str]:
+def run_quill(date_str: Optional[str] = None, image_paths: Optional[List[str]] = None) -> Optional[str]:
     """
-    执行 Quill：生成文章 → docx → 发送 Telegram。
+    执行 Quill：生成文章 → docx（含图片）→ 发送 Telegram。
     返回 .docx 文件路径，失败返回 None。
     """
     if date_str is None:
@@ -277,10 +285,10 @@ def run_quill(date_str: Optional[str] = None) -> Optional[str]:
     with open(md_backup, "w", encoding="utf-8") as f:
         f.write(article_md)
 
-    # 4. 渲染 docx
+    # 4. 渲染 docx（含图片）
     docx_path = str(PROJECT_ROOT / "pipeline" / "drafts" / f"{date_str}-article.docx")
-    logger.info(">>> 渲染 DOCX...")
-    result = render_docx(article_md, docx_path)
+    logger.info(f">>> 渲染 DOCX...（图片: {len(image_paths or [])} 张）")
+    result = render_docx(article_md, docx_path, image_paths=image_paths)
     if not result:
         logger.error("DOCX 渲染失败")
         return None

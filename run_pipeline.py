@@ -36,7 +36,7 @@ def step_scout(args):
 
 
 def step_publish(args):
-    """执行 Sage + Quill + Growth"""
+    """执行 Sage + 图片生成 + Quill(含图片) + Growth"""
     mode = getattr(args, "mode", "lite") or "lite"
     date_str = getattr(args, "date", None)
 
@@ -46,8 +46,38 @@ def step_publish(args):
         logger.warning("Sage 无结果，跳过 Quill")
         return None
 
+    # 先生成所有图片（Charts + Nano Banana），再渲染 DOCX
+    all_images = []
+
+    # Charts：matplotlib 图表
+    try:
+        from chart_renderer import run_charts
+        charts = run_charts(date_str=date_str)
+        if charts:
+            all_images.extend(charts)
+            from telegram_sender import send_document
+            for chart_path in charts:
+                send_document(chart_path, caption=f"📊 {Path(chart_path).stem}")
+            logger.info(f"图表已发送: {len(charts)} 张")
+    except Exception as e:
+        logger.warning(f"图表生成/发送失败（不影响发布）: {e}")
+
+    # Nano Banana：AI 生成封面图 + 信息差关系图
+    try:
+        from image_generator import run_image_gen
+        ai_images = run_image_gen(date_str=date_str)
+        if ai_images:
+            all_images.extend(ai_images)
+            from telegram_sender import send_document
+            for img_path in ai_images:
+                send_document(img_path, caption=f"🎨 {Path(img_path).stem}")
+            logger.info(f"AI 图片已发送: {len(ai_images)} 张")
+    except Exception as e:
+        logger.warning(f"Nano Banana 图片生成失败（不影响发布）: {e}")
+
+    # Quill：生成文章 + 渲染 DOCX（含图片）
     from quill_runner import run_quill
-    quill_result = run_quill(date_str=date_str)
+    quill_result = run_quill(date_str=date_str, image_paths=all_images)
 
     # Growth：Quill 完成后自动生成增长素材包
     if quill_result:
@@ -56,30 +86,6 @@ def step_publish(args):
             run_growth(date_str=date_str)
         except Exception as e:
             logger.warning(f"Growth 运行失败（不影响发布）: {e}")
-
-        # Charts：自动生成图表并发送 Telegram
-        try:
-            from chart_renderer import run_charts
-            charts = run_charts(date_str=date_str)
-            if charts:
-                from telegram_sender import send_document
-                for chart_path in charts:
-                    send_document(chart_path, caption=f"📊 {Path(chart_path).stem}")
-                logger.info(f"图表已发送: {len(charts)} 张")
-        except Exception as e:
-            logger.warning(f"图表生成/发送失败（不影响发布）: {e}")
-
-        # Nano Banana：AI 生成封面图 + 信息差关系图
-        try:
-            from image_generator import run_image_gen
-            ai_images = run_image_gen(date_str=date_str)
-            if ai_images:
-                from telegram_sender import send_document
-                for img_path in ai_images:
-                    send_document(img_path, caption=f"🎨 {Path(img_path).stem}")
-                logger.info(f"AI 图片已发送: {len(ai_images)} 张")
-        except Exception as e:
-            logger.warning(f"Nano Banana 图片生成失败（不影响发布）: {e}")
 
     return quill_result
 

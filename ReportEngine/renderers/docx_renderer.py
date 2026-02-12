@@ -100,8 +100,11 @@ class DocxRenderer:
             if line.lstrip().startswith("- ") or line.lstrip().startswith("* "):
                 list_items = []
                 while i < len(lines) and (lines[i].lstrip().startswith("- ") or lines[i].lstrip().startswith("* ")):
-                    item_text = lines[i].lstrip().lstrip("-* ").strip()
-                    list_items.append(item_text)
+                    stripped = lines[i].lstrip()
+                    # 精确去掉 "- " 或 "* " 前缀（2字符），保留 ** bold 标记
+                    item_text = stripped[2:].strip() if len(stripped) > 2 else ""
+                    if item_text:  # 跳过空内容项
+                        list_items.append(item_text)
                     i += 1
                 for item in list_items:
                     p = self.doc.add_paragraph(style="List Bullet")
@@ -139,6 +142,25 @@ class DocxRenderer:
             i += 1
 
         return self.doc
+
+    def insert_images(self, image_paths: List[str], position: str = "end"):
+        """
+        在文档中插入图片。
+        position: 'after_title' = 标题下方, 'end' = 文末
+        """
+        for img_path in image_paths:
+            if not Path(img_path).exists():
+                logger.warning(f"图片不存在，跳过: {img_path}")
+                continue
+            try:
+                self.doc.add_paragraph()  # 空行间距
+                self.doc.add_picture(img_path, width=Inches(5.5))
+                # 图片居中
+                last_paragraph = self.doc.paragraphs[-1]
+                last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                logger.info(f"图片已插入 DOCX: {Path(img_path).name}")
+            except Exception as e:
+                logger.warning(f"插入图片失败 {img_path}: {e}")
 
     def save(self, output_path: str) -> str:
         """保存 .docx 文件"""
