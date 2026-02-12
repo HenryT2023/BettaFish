@@ -85,20 +85,28 @@ def check_sage_output(date_str: str) -> Dict:
 
 
 def check_quill_output(date_str: str) -> Dict:
-    """检查 Quill 产出"""
+    """检查 Quill 产出（含 premium-addon）"""
     drafts_dir = PROJECT_ROOT / "pipeline" / "drafts"
     docx_path = drafts_dir / f"{date_str}-article.docx"
     md_path = drafts_dir / f"{date_str}-article.md"
+    premium_path = drafts_dir / f"{date_str}-premium-addon.md"
 
     docx_exists = docx_path.exists()
     md_exists = md_path.exists()
+    premium_exists = premium_path.exists()
     docx_size = docx_path.stat().st_size if docx_exists else 0
+    premium_words = 0
+    if premium_exists:
+        with open(premium_path, "r", encoding="utf-8") as f:
+            premium_words = len(f.read())
 
     return {
         "quill_docx": docx_exists,
         "quill_md": md_exists,
         "quill_docx_size": docx_size,
         "quill_ok": docx_exists and docx_size > 1000,
+        "premium_exists": premium_exists,
+        "premium_words": premium_words,
     }
 
 
@@ -154,15 +162,24 @@ def quality_audit_article(date_str: str) -> Dict:
     from openai import OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url)
 
-    system_prompt = """你是公众号文章质量审核员。请对文章评分并输出 JSON：
+    system_prompt = """你是公众号文章质量与商业化审核员。请对文章评分并输出 JSON：
 {
   "readability": 1-10,
   "info_value": 1-10,
   "title_appeal": 1-10,
+  "sellability": 1-10,
   "overall": 1-10,
   "issues": ["问题1", "问题2"],
-  "suggestion": "一句话改进建议"
+  "suggestion": "一句话改进建议",
+  "monetization_hint": "付费内容可以怎么延伸（20字）"
 }
+
+sellability 评分维度：
+- 话题是否有付费深挖空间（数据报告/工具测评/案例拆解）
+- 文末是否有自然的付费引导
+- 内容是否留了"钩子"（读者想看完整版的动力）
+- 目标读者的付费意愿（跨境电商/SaaS 从业者偏高）
+
 只返回 JSON。"""
 
     try:
@@ -255,14 +272,24 @@ def run_observer(date_str: Optional[str] = None) -> Optional[str]:
     status_emoji = "✅" if all_ok else "⚠️"
     quality_emoji = "✅" if quality.get("quality_ok") else "❌"
 
+    # 可卖性评分提取
+    sellability = quality.get("quality_detail", {}).get("sellability", 0)
+    monetization_hint = quality.get("quality_detail", {}).get("monetization_hint", "")
+    sell_emoji = "💰" if sellability >= 7 else "💸" if sellability >= 5 else "⚪"
+
     report_text = (
         f"{status_emoji} <b>Observer 每日审计 — {date_str}</b>\n\n"
         f"📡 Scout: {scout['scout_files']} 批 / {scout['scout_items']} 条\n"
         f"🧠 Sage: {'✅ ' + sage['sage_topic'] if sage['sage_ok'] else '❌ 无输出'}\n"
         f"✍️ Quill: {'✅ ' + str(quill['quill_docx_size']) + ' bytes' if quill['quill_ok'] else '❌ 无输出'}\n"
+        f"🔒 Premium: {'✅ ' + str(quill.get('premium_words', 0)) + ' 字' if quill.get('premium_exists') else '❌ 无产出'}\n"
         f"{quality_emoji} 质量: {quality.get('quality_score', '?')}/10\n"
+        f"{sell_emoji} 可卖性: {sellability}/10\n"
         f"📊 State: {state_check['state_url_count']} URLs / {state_check['state_publish_count']} published today\n"
     )
+
+    if monetization_hint:
+        report_text += f"\n💡 变现建议: {monetization_hint}\n"
 
     if state_check["state_issues"]:
         report_text += f"\n⚠️ State 问题: {'; '.join(state_check['state_issues'])}\n"
