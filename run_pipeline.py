@@ -36,7 +36,7 @@ def step_scout(args):
 
 
 def step_publish(args):
-    """执行 Sage + Quill"""
+    """执行 Sage + Quill + Growth"""
     mode = getattr(args, "mode", "lite") or "lite"
     date_str = getattr(args, "date", None)
 
@@ -48,6 +48,15 @@ def step_publish(args):
 
     from quill_runner import run_quill
     quill_result = run_quill(date_str=date_str)
+
+    # Growth：Quill 完成后自动生成增长素材包
+    if quill_result:
+        try:
+            from growth_runner import run_growth
+            run_growth(date_str=date_str)
+        except Exception as e:
+            logger.warning(f"Growth 运行失败（不影响发布）: {e}")
+
     return quill_result
 
 
