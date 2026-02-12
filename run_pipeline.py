@@ -57,6 +57,18 @@ def step_publish(args):
         except Exception as e:
             logger.warning(f"Growth 运行失败（不影响发布）: {e}")
 
+        # Charts：自动生成图表并发送 Telegram
+        try:
+            from chart_renderer import run_charts
+            charts = run_charts(date_str=date_str)
+            if charts:
+                from telegram_sender import send_document
+                for chart_path in charts:
+                    send_document(chart_path, caption=f"📊 {Path(chart_path).stem}")
+                logger.info(f"图表已发送: {len(charts)} 张")
+        except Exception as e:
+            logger.warning(f"图表生成/发送失败（不影响发布）: {e}")
+
     return quill_result
 
 
