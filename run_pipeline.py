@@ -69,6 +69,18 @@ def step_publish(args):
         except Exception as e:
             logger.warning(f"图表生成/发送失败（不影响发布）: {e}")
 
+        # Nano Banana：AI 生成封面图 + 信息差关系图
+        try:
+            from image_generator import run_image_gen
+            ai_images = run_image_gen(date_str=date_str)
+            if ai_images:
+                from telegram_sender import send_document
+                for img_path in ai_images:
+                    send_document(img_path, caption=f"🎨 {Path(img_path).stem}")
+                logger.info(f"AI 图片已发送: {len(ai_images)} 张")
+        except Exception as e:
+            logger.warning(f"Nano Banana 图片生成失败（不影响发布）: {e}")
+
     return quill_result
 
 

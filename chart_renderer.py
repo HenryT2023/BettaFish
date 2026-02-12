@@ -69,44 +69,58 @@ def render_trend_chart(scout_items: List[Dict], output_path: str, top_n: int = 8
 
     titles = []
     scores = []
-    colors = []
     for item in sorted_items:
         title = item.get("title", "")[:25]
         if len(item.get("title", "")) > 25:
             title += "..."
         titles.append(title)
         scores.append(item.get("avg_score", 0))
-        source = item.get("source", "")
-        if "Domestic" in source:
-            colors.append("#E74C3C")  # 红色=国内
-        else:
-            colors.append("#3498DB")  # 蓝色=海外
 
-    fig, ax = plt.subplots(figsize=(10, max(4, len(titles) * 0.6)))
-    bars = ax.barh(range(len(titles)), scores, color=colors, height=0.6)
+    # 深色现代主题
+    bg_color = "#0f1117"
+    text_color = "#e0e0e0"
+    grid_color = "#2a2d35"
+    intl_color = "#00d4aa"   # 青绿=海外
+    domestic_color = "#ff6b6b"  # 珊瑚红=国内
+    colors = [domestic_color if "Domestic" in item.get("source", "") else intl_color for item in sorted_items]
+
+    fig, ax = plt.subplots(figsize=(10, max(4, len(titles) * 0.65)))
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
+
+    bars = ax.barh(range(len(titles)), scores, color=colors, height=0.55, edgecolor="none")
     ax.set_yticks(range(len(titles)))
-    ax.set_yticklabels(titles, fontsize=9)
-    ax.set_xlabel("Score", fontsize=11)
-    ax.set_title("Trend Relevance Top {}".format(top_n), fontsize=13, fontweight="bold")
+    ax.set_yticklabels(titles, fontsize=9, color=text_color)
+    ax.set_xlabel("Score", fontsize=10, color=text_color)
+    ax.set_title("Trend Relevance Top {}".format(top_n), fontsize=14, fontweight="bold", color="white", pad=15)
     ax.invert_yaxis()
     ax.set_xlim(0, 10)
+    ax.tick_params(colors=text_color, labelsize=9)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_color(grid_color)
+    ax.spines["left"].set_color(grid_color)
+    ax.xaxis.grid(True, color=grid_color, linestyle="--", alpha=0.5)
+    ax.set_axisbelow(True)
 
-    # 添加分数标签
     for bar, score in zip(bars, scores):
-        ax.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
-                f"{score:.1f}", va="center", fontsize=9)
+        ax.text(bar.get_width() + 0.15, bar.get_y() + bar.get_height() / 2,
+                f"{score:.1f}", va="center", fontsize=9, color=text_color, fontweight="bold")
 
-    # 图例
     from matplotlib.patches import Patch
     legend_elements = [
-        Patch(facecolor="#3498DB", label="International"),
-        Patch(facecolor="#E74C3C", label="Domestic"),
+        Patch(facecolor=intl_color, label="International"),
+        Patch(facecolor=domestic_color, label="Domestic"),
     ]
-    ax.legend(handles=legend_elements, loc="lower right", fontsize=9)
+    leg = ax.legend(handles=legend_elements, loc="lower right", fontsize=8,
+                    facecolor=bg_color, edgecolor=grid_color, labelcolor=text_color)
+
+    # 品牌水印
+    fig.text(0.98, 0.02, "东旺数贸", ha="right", fontsize=8, color="#555555", alpha=0.6)
 
     plt.tight_layout()
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight", facecolor=bg_color)
     plt.close()
 
     logger.info(f"趋势图已保存: {output_path}")
@@ -128,10 +142,17 @@ def render_gap_chart(analysis: Dict, output_path: str) -> Optional[str]:
         logger.warning("无 top3 话题数据，跳过信息差图")
         return None
 
-    fig, ax = plt.subplots(figsize=(9, max(3, len(top3) * 1.2 + 1)))
+    bg_color = "#0f1117"
+    text_color = "#e0e0e0"
+    header_color = "#00d4aa"
+    row_even = "#181b22"
+    row_odd = "#1e2029"
+
+    fig, ax = plt.subplots(figsize=(10, max(3, len(top3) * 1.2 + 1.5)))
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
     ax.axis("off")
 
-    # 构建表格数据
     col_labels = ["Topic", "Score", "Domestic Match", "Gap Insight"]
     cell_data = []
     for t in top3[:5]:
@@ -152,20 +173,28 @@ def render_gap_chart(analysis: Dict, output_path: str) -> Optional[str]:
     table.set_fontsize(9)
     table.scale(1.2, 1.8)
 
-    # 表头样式
     for j in range(len(col_labels)):
-        table[0, j].set_facecolor("#2C3E50")
-        table[0, j].set_text_props(color="white", fontweight="bold")
+        table[0, j].set_facecolor(header_color)
+        table[0, j].set_text_props(color="#0f1117", fontweight="bold")
+        table[0, j].set_edgecolor("#2a2d35")
 
-    # 信息差洞察文字
+    for i in range(1, len(cell_data) + 1):
+        row_color = row_even if i % 2 == 0 else row_odd
+        for j in range(len(col_labels)):
+            table[i, j].set_facecolor(row_color)
+            table[i, j].set_text_props(color=text_color)
+            table[i, j].set_edgecolor("#2a2d35")
+
     gap_insight = info_gap.get("gap_insight", "")
     if gap_insight:
-        fig.text(0.5, 0.02, f"Gap: {gap_insight[:80]}", ha="center", fontsize=9, style="italic", color="#7F8C8D")
+        fig.text(0.5, 0.03, f"💡 {gap_insight[:80]}", ha="center", fontsize=9, style="italic", color="#00d4aa")
 
-    ax.set_title("Info Gap Analysis", fontsize=13, fontweight="bold", pad=20)
+    ax.set_title("Info Gap Analysis", fontsize=14, fontweight="bold", color="white", pad=20)
+    fig.text(0.98, 0.02, "东旺数贸", ha="right", fontsize=8, color="#555555", alpha=0.6)
+
     plt.tight_layout()
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight", facecolor=bg_color)
     plt.close()
 
     logger.info(f"信息差图已保存: {output_path}")
