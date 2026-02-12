@@ -259,13 +259,45 @@ def run_quill(date_str: Optional[str] = None) -> Optional[str]:
     else:
         logger.warning(">>> Telegram 发送失败（文章已保存，可手动发送）")
 
-    # 6. 更新发布计数
+    # 6. 触发 wechat-publisher 创建公众号草稿
+    _trigger_wechat_publisher(docx_path)
+
+    # 7. 更新发布计数
     state = load_state()
     increment_publish_count(state)
     save_state(state)
 
     logger.info(f"=== Quill 完成 | {docx_path} ===")
     return docx_path
+
+
+def _trigger_wechat_publisher(docx_path: str):
+    """直接调用 wechat_publisher_cron.py --file 创建公众号草稿"""
+    import subprocess
+    wechat_script = Path.home() / "CascadeProjects" / "wechat_publisher_cron.py"
+    if not wechat_script.exists():
+        logger.info("wechat_publisher_cron.py 不存在，跳过公众号发布")
+        return
+    try:
+        logger.info(">>> 触发 wechat-publisher 创建公众号草稿...")
+        result = subprocess.run(
+            ["/usr/bin/python3", str(wechat_script), "--file", docx_path],
+            capture_output=True, text=True, timeout=120,
+            cwd=str(wechat_script.parent),
+        )
+        if result.returncode == 0:
+            logger.info(">>> wechat-publisher 执行成功")
+            if result.stdout:
+                for line in result.stdout.strip().split("\n")[-5:]:
+                    logger.info(f"    {line}")
+        else:
+            logger.warning(f">>> wechat-publisher 返回码 {result.returncode}")
+            if result.stderr:
+                logger.warning(f"    {result.stderr[:300]}")
+    except subprocess.TimeoutExpired:
+        logger.warning(">>> wechat-publisher 超时 (120s)")
+    except Exception as e:
+        logger.warning(f">>> wechat-publisher 调用失败: {e}")
 
 
 def main():
