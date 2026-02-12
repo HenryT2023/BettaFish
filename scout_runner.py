@@ -88,7 +88,9 @@ def _brave_search(query: str, count: int = 10, lang: str = "en", source_tag: str
         return []
 
     headers = {"Accept": "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": api_key}
-    params = {"q": query, "count": count, "search_lang": lang, "freshness": "pw"}
+    params = {"q": query, "count": count, "freshness": "pw"}
+    if lang and lang != "auto":
+        params["search_lang"] = lang
     try:
         resp = requests.get("https://api.search.brave.com/res/v1/web/search", headers=headers, params=params, timeout=15)
         resp.raise_for_status()
@@ -168,7 +170,7 @@ def search_domestic(keywords: List[str]) -> List[Dict]:
     brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
     if brave_key:
         for kw in keywords[:3]:
-            items = _brave_search(kw, count=8, lang="zh-hans", source_tag="Brave/Domestic")
+            items = _brave_search(kw, count=8, lang="auto", source_tag="Brave/Domestic")
             results.extend(items)
         if results:
             logger.info(f"Brave 中文搜索返回 {len(results)} 条结果")
