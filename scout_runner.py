@@ -39,21 +39,37 @@ from pipeline_state import (
     save_state,
 )
 
-# ======== 主题轮换表 ========
+# ======== 赛道定义 & 主题轮换表 ========
+
+# 赛道分层：free = 免费频道可见 / premium = 仅会员频道
+TRACK_TIERS: Dict[str, str] = {
+    "Cross-border E-commerce": "free",       # 核心赛道，引流
+    "AI Tools & Agent":        "free",       # 高传播性，引流
+    "SaaS & Digital Trade":    "premium",    # 深度付费
+    "Crypto & Web3":           "premium",    # 细分付费
+    "Deep/Academic":           "premium",    # 深度付费
+    "General Tech":            "free",       # 泛科技，引流
+}
 
 THEME_SCHEDULE: Dict[int, Dict] = {
-    2:  {"theme": "Deep/Academic",              "keywords_en": ["AI commerce research paper 2026", "cross-border trade technology study"],
-                                                "keywords_cn": ["跨境电商研究报告", "AI商业论文"]},
-    6:  {"theme": "AI Tools & Agent",           "keywords_en": ["AI agent launch 2026", "new AI tool product", "AI automation startup"],
-                                                "keywords_cn": ["AI工具发布", "AI Agent新品", "人工智能自动化"]},
-    10: {"theme": "Cross-border E-commerce",    "keywords_en": ["cross-border ecommerce trend 2026", "Amazon seller update", "TikTok Shop global"],
-                                                "keywords_cn": ["跨境电商趋势", "亚马逊卖家", "TikTok电商"]},
-    14: {"theme": "SaaS & Digital Trade",       "keywords_en": ["SaaS startup funding 2026", "digital trade platform", "B2B SaaS product launch"],
-                                                "keywords_cn": ["SaaS创业融资", "数字贸易平台", "B2B SaaS"]},
-    18: {"theme": "Crypto & Web3",              "keywords_en": ["crypto regulation update 2026", "Web3 commerce", "blockchain trade finance"],
-                                                "keywords_cn": ["加密货币监管", "Web3商业", "区块链贸易"]},
-    22: {"theme": "General Tech",               "keywords_en": ["trending tech product 2026", "Product Hunt top", "tech startup launch"],
-                                                "keywords_cn": ["科技新品", "技术趋势", "创业公司"]},
+    2:  {"theme": "Deep/Academic",           "track_tier": "premium",
+         "keywords_en": ["AI commerce research paper 2026", "cross-border trade technology study"],
+         "keywords_cn": ["跨境电商研究报告", "AI商业论文"]},
+    6:  {"theme": "AI Tools & Agent",        "track_tier": "free",
+         "keywords_en": ["AI agent launch 2026", "new AI tool product", "AI automation startup"],
+         "keywords_cn": ["AI工具发布", "AI Agent新品", "人工智能自动化"]},
+    10: {"theme": "Cross-border E-commerce", "track_tier": "free",
+         "keywords_en": ["cross-border ecommerce trend 2026", "Amazon seller update", "TikTok Shop global"],
+         "keywords_cn": ["跨境电商趋势", "亚马逊卖家", "TikTok电商"]},
+    14: {"theme": "SaaS & Digital Trade",    "track_tier": "premium",
+         "keywords_en": ["SaaS startup funding 2026", "digital trade platform", "B2B SaaS product launch"],
+         "keywords_cn": ["SaaS创业融资", "数字贸易平台", "B2B SaaS"]},
+    18: {"theme": "Crypto & Web3",           "track_tier": "premium",
+         "keywords_en": ["crypto regulation update 2026", "Web3 commerce", "blockchain trade finance"],
+         "keywords_cn": ["加密货币监管", "Web3商业", "区块链贸易"]},
+    22: {"theme": "General Tech",            "track_tier": "free",
+         "keywords_en": ["trending tech product 2026", "Product Hunt top", "tech startup launch"],
+         "keywords_cn": ["科技新品", "技术趋势", "创业公司"]},
 }
 
 # 最大 Scout 条目数
@@ -289,12 +305,14 @@ def run_scout(theme_override: Optional[str] = None) -> Optional[str]:
 
     # 确定主题
     if theme_override:
-        theme_info = {"theme": theme_override, "keywords_en": [theme_override], "keywords_cn": [theme_override]}
+        tier = TRACK_TIERS.get(theme_override, "free")
+        theme_info = {"theme": theme_override, "track_tier": tier, "keywords_en": [theme_override], "keywords_cn": [theme_override]}
     else:
         theme_info = get_current_theme(now.hour)
 
     theme = theme_info["theme"]
-    logger.info(f"=== Scout 开始 | batch={batch_id} | theme={theme} ===")
+    track_tier = theme_info.get("track_tier", TRACK_TIERS.get(theme, "free"))
+    logger.info(f"=== Scout 开始 | batch={batch_id} | theme={theme} | tier={track_tier} ===")
 
     # 1. 海外搜索
     logger.info(">>> 海外搜索...")
@@ -362,6 +380,7 @@ def run_scout(theme_override: Optional[str] = None) -> Optional[str]:
     output_data = {
         "batch": batch_id,
         "theme": theme,
+        "track_tier": track_tier,
         "timestamp": now.isoformat(),
         "total_raw": len(intl_results) + len(domestic_results),
         "total_filtered": len(filtered),
