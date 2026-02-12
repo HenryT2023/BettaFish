@@ -4,7 +4,7 @@ Scout Runner — 信息扫描模块
 
 职责：
 1. 根据当前小时确定扫描主题
-2. 海外轨：调用 QueryEngine (Tavily) 搜索英文新闻
+2. 海外轨：Brave Search API 搜索英文新闻（备选 Tavily）
 3. 国内轨：调用 MindSpider BroadTopicExtraction 获取国内热点（需要配置）
 4. LLM 评分：china_relevance / info_asymmetry / wechat_potential
 5. 去重 + 过滤 → 保存 JSON 到 pipeline/scout/
@@ -76,23 +76,67 @@ def get_current_theme(hour: Optional[int] = None) -> Dict:
     return THEME_SCHEDULE[best]
 
 
+def _brave_search(query: str, count: int = 5) -> List[Dict]:
+    """
+    调用 Brave Search API，返回标准化结果列表。
+    https://api.search.brave.com/app/documentation/web-search
+    """
+    import requests
+
+    api_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
+    if not api_key:
+        return []
+
+    headers = {"Accept": "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": api_key}
+    params = {"q": query, "count": count, "search_lang": "en", "freshness": "pw"}  # pw = past week
+    try:
+        resp = requests.get("https://api.search.brave.com/res/v1/web/search", headers=headers, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        items = []
+        for r in data.get("web", {}).get("results", []):
+            items.append({
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "content": (r.get("description", ""))[:500],
+                "source": "Brave/International",
+                "published_date": r.get("page_age", ""),
+                "keyword": query,
+            })
+        return items
+    except Exception as e:
+        logger.warning(f"Brave Search '{query}' 失败: {e}")
+        return []
+
+
 def search_international(keywords: List[str], max_results: int = 5) -> List[Dict]:
     """
-    海外轨：使用 QueryEngine 的 Tavily 搜索工具
+    海外轨：优先 Brave Search API，备选 Tavily
     返回标准化的搜索结果列表
     """
     results = []
 
+    # --- 优先 Brave Search ---
+    brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
+    if brave_key:
+        for kw in keywords[:3]:
+            items = _brave_search(kw, count=max_results)
+            results.extend(items)
+        if results:
+            logger.info(f"Brave Search 返回 {len(results)} 条结果")
+            return results
+        logger.warning("Brave Search 无结果，尝试 Tavily 备选")
+
+    # --- 备选 Tavily ---
     try:
         from QueryEngine.tools.search import TavilyNewsAgency
         tavily_key = settings.TAVILY_API_KEY
         if not tavily_key:
-            logger.warning("TAVILY_API_KEY 未配置，跳过海外搜索")
+            logger.warning("TAVILY_API_KEY 也未配置，跳过海外搜索")
             return results
 
         agency = TavilyNewsAgency(api_key=tavily_key)
-
-        for kw in keywords[:3]:  # 每个主题最多 3 个关键词
+        for kw in keywords[:3]:
             try:
                 response = agency.basic_search_news(kw, max_results=max_results)
                 for r in response.results:
@@ -105,9 +149,7 @@ def search_international(keywords: List[str], max_results: int = 5) -> List[Dict
                         "keyword": kw,
                     })
             except Exception as e:
-                logger.warning(f"搜索关键词 '{kw}' 失败: {e}")
-                continue
-
+                logger.warning(f"Tavily 搜索 '{kw}' 失败: {e}")
     except ImportError as e:
         logger.error(f"QueryEngine 导入失败: {e}")
     except Exception as e:

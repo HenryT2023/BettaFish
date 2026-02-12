@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     # ================== Pipeline / Telegram 配置 ====================
     TELEGRAM_BOT_TOKEN: Optional[str] = Field(None, description="Telegram Bot Token，用于 pipeline 发送文件和消息")
     TELEGRAM_CHAT_ID: Optional[str] = Field(None, description="Telegram Chat ID，用于 pipeline 发送目标")
+    BRAVE_API_KEY: Optional[str] = Field(None, description="Brave Search API Key，用于海外新闻搜索")
 
     # ================== GraphRAG 配置 ====================
     GRAPHRAG_ENABLED: bool = Field(False, description="是否启用GraphRAG知识图谱功能（true/false）")
