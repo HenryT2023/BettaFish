@@ -187,7 +187,7 @@ def render_gap_chart(analysis: Dict, output_path: str) -> Optional[str]:
 
     gap_insight = info_gap.get("gap_insight", "")
     if gap_insight:
-        fig.text(0.5, 0.03, f"💡 {gap_insight[:80]}", ha="center", fontsize=9, style="italic", color="#00d4aa")
+        fig.text(0.5, 0.03, f"Insight: {gap_insight[:80]}", ha="center", fontsize=9, style="italic", color="#00d4aa")
 
     ax.set_title("Info Gap Analysis", fontsize=14, fontweight="bold", color="white", pad=20)
     fig.text(0.98, 0.02, "东旺数贸", ha="right", fontsize=8, color="#555555", alpha=0.6)
