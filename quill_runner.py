@@ -80,18 +80,42 @@ def generate_article_markdown(analysis: Dict) -> str:
     topic = selected.get("topic", "")
     headlines = selected.get("headlines", [])
     outline = selected.get("outline", [])
+    evidence = selected.get("evidence", [])
     forum_summary = analysis.get("forum_summary", "")
+    info_gap = analysis.get("info_gap_analysis", {})
 
     # 构建大纲文本
     outline_text = ""
     if isinstance(outline, list):
-        for section in outline:
+        for i, section in enumerate(outline):
             if isinstance(section, dict):
-                outline_text += f"- {section.get('title', '')}: {section.get('points', section.get('content', ''))}\n"
+                refs = section.get("evidence_refs", [])
+                ref_str = f" [证据: {refs}]" if refs else ""
+                outline_text += f"{i+1}. {section.get('title', '')}: {section.get('points', section.get('content', ''))}{ref_str}\n"
             elif isinstance(section, str):
-                outline_text += f"- {section}\n"
+                outline_text += f"{i+1}. {section}\n"
     elif isinstance(outline, str):
         outline_text = outline
+
+    # 构建证据块文本
+    evidence_text = ""
+    if evidence:
+        for ev in evidence:
+            evidence_text += (
+                f"[证据{ev.get('ref_id', '?')}] {ev.get('source_title', '')}\n"
+                f"  URL: {ev.get('source_url', '')}\n"
+                f"  原文: {ev.get('quote', '')}\n"
+                f"  可验证事实: {', '.join(ev.get('verifiable_facts', []))}\n\n"
+            )
+
+    # 信息差分析文本
+    gap_text = ""
+    if info_gap:
+        gap_text = (
+            f"海外视角: {info_gap.get('international_view', '')}\n"
+            f"国内视角: {info_gap.get('domestic_view', '')}\n"
+            f"信息差洞察: {info_gap.get('gap_insight', '')}"
+        )
 
     # 多视角参考
     forum_text = ""
@@ -103,36 +127,46 @@ def generate_article_markdown(analysis: Dict) -> str:
             forum_text = str(forum_summary)
 
     system_prompt = """你是「东旺数贸」公众号的资深撰稿人。
-你的读者是：跨境电商从业者、数字贸易关注者、AI工具爱好者。
+读者：跨境电商从业者、数字贸易关注者、AI工具爱好者。
 
 写作要求：
-1. 标题：从候选标题中选最好的一个，或改写得更好（20字以内）
-2. 导语：用数据/故事/对比开头，100字内，直击痛点，不要废话
-3. 正文：3-5个小节，每节有醒目小标题（## 格式）
-4. 每段 80-150 字，避免大段落
-5. 用 **加粗** 突出关键数据和观点
-6. 结尾：一句话总结 + 互动提问
-7. 总长 1500-3000 字
-8. 语气：专业但不学术，有信息差感，让读者觉得"学到了"
+1. 标题：从候选标题中选最好的，或改写得更好（20字以内），以 # 开头
+2. 导语：用证据中的数据/事实开头，100字内，直击痛点
+3. 正文：3-5个小节，每节用 ## 小标题
+4. 每个小节结构：
+   - 开头1句"本节结论"（加粗）
+   - 中间用证据支撑论述，80-150字/段
+   - 结尾3条 bullet "你可以怎么做"
+5. 至少穿插1个对比表格（用 Markdown 表格语法）
+6. 用 **加粗** 突出关键数据，数据必须来自证据块
+7. 结尾：一句话总结 + 互动提问 + 引导语"完整版数据+行动清单，见会员频道"
+8. 总长 **1500-2500 字**（这是硬性要求，低于1500字不合格）
 9. 输出纯 Markdown 格式，不要代码块包裹
 
-禁止：
-- 不要用"本文将介绍"之类的废话开头
-- 不要用"总之/综上所述"做机械总结
-- 不要堆砌信息，要有洞察和观点"""
+绝对禁止：
+- 禁止编造任何数字、金额、百分比——只能引用证据块中的 verifiable_facts
+- 禁止使用"据统计""据报告"等模糊引用，必须标明来源
+- 不要用"本文将介绍"开头
+- 不要用"总之/综上所述"做机械总结"""
 
     user_prompt = f"""话题：{topic}
 
 标题候选：
-{chr(10).join(f'- {h}' for h in headlines)}
+{chr(10).join(f'{i+1}. {h}' for i, h in enumerate(headlines))}
 
 文章大纲：
 {outline_text}
 
-多视角参考：
+=== 证据块（写作时只能引用这些事实）===
+{evidence_text if evidence_text else "（无结构化证据，请基于大纲内容写作，不要编造数据）"}
+
+=== 信息差分析 ===
+{gap_text if gap_text else "（无信息差分析）"}
+
+=== 多视角参考 ===
 {forum_text}
 
-请根据以上信息撰写完整的公众号文章（Markdown 格式）。"""
+请撰写1500-2500字的公众号文章（Markdown 格式）。"""
 
     try:
         response = client.chat.completions.create(
@@ -259,16 +293,99 @@ def run_quill(date_str: Optional[str] = None) -> Optional[str]:
     else:
         logger.warning(">>> Telegram 发送失败（文章已保存，可手动发送）")
 
-    # 6. 触发 wechat-publisher 创建公众号草稿
+    # 6. 生成付费加料 premium-addon
+    _generate_premium_addon(analysis, date_str, title)
+
+    # 7. 触发 wechat-publisher 创建公众号草稿
     _trigger_wechat_publisher(docx_path)
 
-    # 7. 更新发布计数
+    # 8. 更新发布计数
     state = load_state()
     increment_publish_count(state)
     save_state(state)
 
     logger.info(f"=== Quill 完成 | {docx_path} ===")
     return docx_path
+
+
+def _generate_premium_addon(analysis: Dict, date_str: str, title: str):
+    """生成付费加料 premium-addon.md（300-800字：数据表+行动清单+资源链接）"""
+    from openai import OpenAI
+
+    api_key = settings.REPORT_ENGINE_API_KEY or settings.INSIGHT_ENGINE_API_KEY
+    base_url = settings.REPORT_ENGINE_BASE_URL or settings.INSIGHT_ENGINE_BASE_URL
+    model = settings.REPORT_ENGINE_MODEL_NAME or settings.INSIGHT_ENGINE_MODEL_NAME or "qwen-max"
+
+    if not api_key:
+        logger.info("无 LLM API Key，跳过 premium-addon 生成")
+        return
+
+    selected = analysis.get("selected_topic", {})
+    evidence = selected.get("evidence", [])
+    info_gap = analysis.get("info_gap_analysis", {})
+    outline = selected.get("outline", [])
+
+    evidence_text = ""
+    for ev in evidence:
+        evidence_text += f"- [{ev.get('source_title', '')}]({ev.get('source_url', '')}): {ev.get('quote', '')}\n"
+        evidence_text += f"  事实: {', '.join(ev.get('verifiable_facts', []))}\n"
+
+    prompt = f"""基于以下信息，生成一份"会员加料"内容（Markdown 格式，300-800字）。
+
+话题：{title}
+信息差洞察：{info_gap.get('gap_insight', '')}
+
+证据来源：
+{evidence_text}
+
+要求输出结构：
+## 📊 数据对比表
+（用 Markdown 表格，海外 vs 国内 对比关键指标）
+
+## ✅ 行动清单
+（5条可执行步骤，每条1句话，具体可操作）
+
+## 🔗 延伸资源
+（3-5个链接，来自证据的原始 URL，附简要说明）
+
+## 💡 深度洞察
+（1段100字的独家分析，只在会员版出现）
+
+只输出 Markdown，不要代码块包裹。"""
+
+    try:
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            timeout=60,
+        )
+        addon_md = response.choices[0].message.content.strip()
+        if addon_md.startswith("```"):
+            addon_md = addon_md.split("\n", 1)[-1]
+        if addon_md.endswith("```"):
+            addon_md = addon_md[:-3].strip()
+
+        # 保存
+        addon_path = PROJECT_ROOT / "pipeline" / "drafts" / f"{date_str}-premium-addon.md"
+        addon_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(addon_path, "w", encoding="utf-8") as f:
+            f.write(f"# 会员加料 | {title}\n\n{addon_md}")
+
+        logger.info(f">>> Premium addon 已保存: {addon_path} ({len(addon_md)} 字)")
+
+        # 发送到 Premium Telegram 频道（如果配置了）
+        paid_chat_id = getattr(settings, "PAID_TELEGRAM_CHAT_ID", None) or os.getenv("PAID_TELEGRAM_CHAT_ID", "")
+        if paid_chat_id:
+            from telegram_sender import send_message
+            send_message(f"🔒 会员加料 | {title}\n\n{addon_md[:3000]}", chat_id=paid_chat_id)
+            logger.info(">>> Premium addon 已发送到会员频道")
+        else:
+            logger.info(">>> PAID_TELEGRAM_CHAT_ID 未配置，跳过会员频道投递")
+
+    except Exception as e:
+        logger.warning(f"Premium addon 生成失败: {e}")
 
 
 def _trigger_wechat_publisher(docx_path: str):

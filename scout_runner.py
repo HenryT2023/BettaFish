@@ -57,10 +57,10 @@ THEME_SCHEDULE: Dict[int, Dict] = {
 }
 
 # 最大 Scout 条目数
-MAX_SCOUT_ITEMS = 5
+MAX_SCOUT_ITEMS = 8
 
 # LLM 评分阈值
-SCORE_THRESHOLD = 7.0
+SCORE_THRESHOLD = 6.5
 
 
 def get_current_theme(hour: Optional[int] = None) -> Dict:
@@ -76,10 +76,10 @@ def get_current_theme(hour: Optional[int] = None) -> Dict:
     return THEME_SCHEDULE[best]
 
 
-def _brave_search(query: str, count: int = 5) -> List[Dict]:
+def _brave_search(query: str, count: int = 10, lang: str = "en", source_tag: str = "Brave/International") -> List[Dict]:
     """
     调用 Brave Search API，返回标准化结果列表。
-    https://api.search.brave.com/app/documentation/web-search
+    lang: "en" 海外搜索 / "zh" 国内搜索
     """
     import requests
 
@@ -88,7 +88,7 @@ def _brave_search(query: str, count: int = 5) -> List[Dict]:
         return []
 
     headers = {"Accept": "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": api_key}
-    params = {"q": query, "count": count, "search_lang": "en", "freshness": "pw"}  # pw = past week
+    params = {"q": query, "count": count, "search_lang": lang, "freshness": "pw"}
     try:
         resp = requests.get("https://api.search.brave.com/res/v1/web/search", headers=headers, params=params, timeout=15)
         resp.raise_for_status()
@@ -99,17 +99,17 @@ def _brave_search(query: str, count: int = 5) -> List[Dict]:
                 "title": r.get("title", ""),
                 "url": r.get("url", ""),
                 "content": (r.get("description", ""))[:500],
-                "source": "Brave/International",
+                "source": source_tag,
                 "published_date": r.get("page_age", ""),
                 "keyword": query,
             })
         return items
     except Exception as e:
-        logger.warning(f"Brave Search '{query}' 失败: {e}")
+        logger.warning(f"Brave Search '{query}' ({lang}) 失败: {e}")
         return []
 
 
-def search_international(keywords: List[str], max_results: int = 5) -> List[Dict]:
+def search_international(keywords: List[str], max_results: int = 10) -> List[Dict]:
     """
     海外轨：优先 Brave Search API，备选 Tavily
     返回标准化的搜索结果列表
@@ -120,7 +120,7 @@ def search_international(keywords: List[str], max_results: int = 5) -> List[Dict
     brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
     if brave_key:
         for kw in keywords[:3]:
-            items = _brave_search(kw, count=max_results)
+            items = _brave_search(kw, count=max_results, lang="en", source_tag="Brave/International")
             results.extend(items)
         if results:
             logger.info(f"Brave Search 返回 {len(results)} 条结果")
@@ -160,11 +160,21 @@ def search_international(keywords: List[str], max_results: int = 5) -> List[Dict
 
 def search_domestic(keywords: List[str]) -> List[Dict]:
     """
-    国内轨：使用 MindSpider BroadTopicExtraction 获取国内热点
-    需要 MindSpider 已配置 Cookie。如未配置则优雅跳过。
+    国内轨：优先 Brave 中文搜索，备选 MindSpider
     """
     results = []
 
+    # --- 优先 Brave 中文搜索 ---
+    brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
+    if brave_key:
+        for kw in keywords[:3]:
+            items = _brave_search(kw, count=8, lang="zh", source_tag="Brave/Domestic")
+            results.extend(items)
+        if results:
+            logger.info(f"Brave 中文搜索返回 {len(results)} 条结果")
+            return results
+
+    # --- 备选 MindSpider ---
     try:
         from MindSpider.BroadTopicExtraction.get_today_news import get_today_news
         news_items = get_today_news()
@@ -179,7 +189,7 @@ def search_domestic(keywords: List[str]) -> List[Dict]:
                     "keyword": "",
                 })
     except ImportError:
-        logger.info("MindSpider 未配置或不可用，跳过国内搜索")
+        logger.info("MindSpider 未配置或不可用，跳过")
     except Exception as e:
         logger.warning(f"国内搜索异常: {e}")
 

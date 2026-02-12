@@ -92,13 +92,14 @@ def analyze_with_llm(items: List[Dict], mode: str = "lite") -> Dict:
 
     client = OpenAI(api_key=api_key, base_url=base_url)
 
-    # 准备输入
+    # 准备输入：包含完整 URL 和内容，供 evidence 提取
     items_text = ""
-    for i, item in enumerate(items[:10]):  # Top 10
+    for i, item in enumerate(items[:10]):
         items_text += (
             f"\n[{i}] 标题: {item.get('title', '')}\n"
+            f"    URL: {item.get('url', '')}\n"
             f"    来源: {item.get('source', '')}\n"
-            f"    摘要: {item.get('content', '')[:200]}\n"
+            f"    摘要: {item.get('content', '')[:400]}\n"
             f"    评分: china_relevance={item.get('china_relevance', 0)}, "
             f"info_asymmetry={item.get('info_asymmetry', 0)}, "
             f"wechat_potential={item.get('wechat_potential', 0)}\n"
@@ -106,31 +107,67 @@ def analyze_with_llm(items: List[Dict], mode: str = "lite") -> Dict:
         )
 
     system_prompt = """你是「东旺数贸」公众号的首席内容策略师。
-你的读者是：跨境电商从业者、数字贸易关注者、AI工具爱好者。
-你的任务：从候选新闻中选出最适合做公众号深度文章的话题。
+读者：跨境电商从业者、数字贸易关注者、AI工具爱好者。
+任务：从候选新闻中选出最适合做公众号深度文章的话题，并提取可验证证据。
 
-请执行以下分析并输出 JSON：
+严格输出以下 JSON 结构：
 
-1. top3_topics: 选出 Top 3 话题，每个包含：
-   - index: 原始条目索引
-   - topic: 话题名（中文，10字以内）
-   - why_readers_care: 为什么中国读者关心（50字）
-   - domestic_comparison: 国内对标产品/事件
-   - actionable_advice: 读者可以采取的行动（30字）
-   - score: 综合推荐分 (1-10)
+{
+  "top3_topics": [
+    {
+      "index": 0,
+      "topic": "话题名（中文，10字以内）",
+      "why_readers_care": "为什么中国读者关心（50字）",
+      "domestic_comparison": "国内对标产品/事件",
+      "actionable_advice": "读者可以采取的行动（30字）",
+      "score": 8
+    }
+  ],
+  "selected_topic": {
+    "topic": "最终选定话题名",
+    "headlines": [
+      "标题候选1（20字以内，精炼有力）",
+      "标题候选2",
+      "标题候选3"
+    ],
+    "outline": [
+      {"title": "小节标题1", "points": "本节要写的核心内容（50字）", "evidence_refs": [0]},
+      {"title": "小节标题2", "points": "本节要写的核心内容", "evidence_refs": [0, 1]},
+      {"title": "小节标题3", "points": "本节要写的核心内容", "evidence_refs": [1]},
+      {"title": "行动建议", "points": "读者可以做什么", "evidence_refs": []}
+    ],
+    "evidence": [
+      {
+        "ref_id": 0,
+        "source_url": "原始新闻URL",
+        "source_title": "原始新闻标题",
+        "quote": "从摘要中摘录的1-2句关键原文（英文保留原文）",
+        "verifiable_facts": ["$70M", "2026-02-07", "公司名"]
+      }
+    ]
+  },
+  "info_gap_analysis": {
+    "international_view": "海外怎么报道这件事（30字）",
+    "domestic_view": "国内相关报道或缺失情况（30字）",
+    "gap_insight": "信息差在哪，中国读者不知道什么（50字）"
+  },
+  "forum_summary": {
+    "QueryAgent": "信息搜索视角观点（30字）",
+    "InsightAgent": "深度分析视角观点（30字）",
+    "MediaAgent": "社媒传播视角观点（30字）"
+  }
+}
 
-2. selected_topic: 最终选定话题（从 top3 中选 1 个），包含：
-   - topic: 话题名
-   - headlines: 3 个标题候选（20字以内，精炼有力，适合公众号）
-   - outline: 文章大纲，包含 3-5 个小节，每节有标题和要点
-
-3. forum_summary: 多视角分析摘要（如果是 full 模式，模拟 QueryAgent/InsightAgent/MediaAgent 三方观点交叉验证）
-
-只返回 JSON，不要其他文字。"""
+关键规则：
+1. evidence 必须从候选新闻的【原始摘要】中提取，禁止编造任何数据或事实
+2. outline 每个小节必须有明确的 title（中文），不能为空
+3. headlines 必须是3个不同的标题，编号不同
+4. verifiable_facts 只填原文中出现的数字、人名、公司名、日期
+5. 只返回 JSON，不要其他文字"""
 
     mode_hint = ""
     if mode == "full":
-        mode_hint = "\n\n【Full 模式】请模拟三个 Agent 的视角进行交叉验证：\n- QueryAgent（信息搜索视角）: 这个话题的全球信息覆盖度如何？\n- InsightAgent（深度分析视角）: 数据和趋势支持什么结论？\n- MediaAgent（社媒传播视角）: 这个话题在社交媒体上的传播潜力？"
+        mode_hint = "\n\n【Full 模式】请特别关注 info_gap_analysis 和 forum_summary 的质量。"
 
     user_prompt = f"今天的候选新闻：{items_text}{mode_hint}"
 
