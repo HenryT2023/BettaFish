@@ -124,6 +124,15 @@ class DocxRenderer:
                     self._add_rich_text(p, item)
                 continue
 
+            # Markdown 表格（| col1 | col2 | 格式）
+            if line.strip().startswith("|") and "|" in line[1:]:
+                table_lines = []
+                while i < len(lines) and lines[i].strip().startswith("|"):
+                    table_lines.append(lines[i].strip())
+                    i += 1
+                self._render_markdown_table(table_lines)
+                continue
+
             # 普通段落
             p = self.doc.add_paragraph()
             self._add_rich_text(p, line)
@@ -246,6 +255,51 @@ class DocxRenderer:
             table.cell(1, i).text = value_text
 
     # ========== Helpers ==========
+
+    def _render_markdown_table(self, table_lines: List[str]):
+        """解析 Markdown 表格（| col | col |）并渲染为 docx 表格"""
+        if len(table_lines) < 2:
+            return
+
+        def parse_row(line: str) -> List[str]:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            return cells
+
+        # 跳过分隔行（|---|---|）
+        data_lines = []
+        for line in table_lines:
+            stripped = line.replace("|", "").replace("-", "").replace(":", "").strip()
+            if stripped:  # 非纯分隔行
+                data_lines.append(line)
+
+        if not data_lines:
+            return
+
+        rows = [parse_row(line) for line in data_lines]
+        max_cols = max(len(r) for r in rows)
+
+        table = self.doc.add_table(rows=len(rows), cols=max_cols)
+        table.style = "Table Grid"
+
+        for row_idx, row in enumerate(rows):
+            for col_idx, cell_text in enumerate(row):
+                if col_idx < max_cols:
+                    cell = table.cell(row_idx, col_idx)
+                    cell.text = ""
+                    p = cell.paragraphs[0]
+                    self._add_rich_text(p, cell_text)
+                    # 表头加粗 + 底色
+                    if row_idx == 0:
+                        for run in p.runs:
+                            run.bold = True
+                        from docx.oxml.ns import qn
+                        from docx.oxml import OxmlElement
+                        shading = OxmlElement("w:shd")
+                        shading.set(qn("w:fill"), "2C3E50")
+                        shading.set(qn("w:val"), "clear")
+                        cell._tc.get_or_add_tcPr().append(shading)
+                        for run in p.runs:
+                            run.font.color.rgb = RGBColor(255, 255, 255)
 
     def _add_heading(self, text: str, level: int):
         heading = self.doc.add_heading(text, level=min(level, 4))
