@@ -354,6 +354,15 @@ def run_sage(date_str: Optional[str] = None, mode: str = "lite") -> Optional[str
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(md_content)
 
+    # 6. 入库 TrendDB
+    try:
+        from trend_db import TrendDB
+        db = TrendDB()
+        db.ingest_sage(date_str, analysis)
+        db.close()
+    except Exception as e:
+        logger.debug(f"TrendDB 入库跳过: {e}")
+
     logger.info(f"=== Sage 完成 | {output_file} ===")
     return str(output_file)
 

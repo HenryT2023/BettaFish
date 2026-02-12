@@ -371,6 +371,15 @@ def run_scout(theme_override: Optional[str] = None) -> Optional[str]:
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
+    # 8. 入库 TrendDB
+    try:
+        from trend_db import TrendDB
+        db = TrendDB()
+        db.ingest_scout(now.strftime("%Y%m%d"), filtered)
+        db.close()
+    except Exception as e:
+        logger.debug(f"TrendDB 入库跳过: {e}")
+
     logger.info(f"=== Scout 完成 | 保存: {output_file} ===")
     return str(output_file)
 
