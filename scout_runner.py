@@ -262,7 +262,7 @@ def score_items_with_llm(items: List[Dict], theme: str) -> List[Dict]:
                 {"role": "user", "content": user_prompt[:20000]},  # Token guard
             ],
             temperature=0.3,
-            timeout=60,
+            timeout=180,
         )
         content = response.choices[0].message.content.strip()
 
