@@ -1,0 +1,77 @@
+{
+  "_comment": "Scout RSS 订阅源配置 — Google Alerts + Feedspot 国际贸易博客",
+
+  "google_alerts_cn": [
+    {
+      "name": "食材价格趋势",
+      "query": "食材价格趋势",
+      "lang": "zh",
+      "tag": "GoogleAlerts/食材价格"
+    },
+    {
+      "name": "食品行业展会",
+      "query": "食品行业展会",
+      "lang": "zh",
+      "tag": "GoogleAlerts/食品展会"
+    },
+    {
+      "name": "食品安全 Food Safety",
+      "query": "食品安全",
+      "lang": "zh",
+      "tag": "GoogleAlerts/食品安全"
+    },
+    {
+      "name": "食品行业创新",
+      "query": "食品行业创新",
+      "lang": "zh",
+      "tag": "GoogleAlerts/食品创新"
+    },
+    {
+      "name": "食品供应链更新",
+      "query": "食品供应链",
+      "lang": "zh",
+      "tag": "GoogleAlerts/供应链"
+    },
+    {
+      "name": "食品行业报告",
+      "query": "食品行业报告",
+      "lang": "zh",
+      "tag": "GoogleAlerts/行业报告"
+    }
+  ],
+
+  "feedspot_trade_blogs": [
+    {
+      "name": "International Economic Law and Policy Blog",
+      "rss_url": "https://ielp.worldtradelaw.net/atom.xml",
+      "tag": "Feedspot/IELP"
+    },
+    {
+      "name": "Global Trade Magazine",
+      "rss_url": "https://www.globaltrademag.com/feed/",
+      "tag": "Feedspot/GlobalTrade"
+    },
+    {
+      "name": "ShippingSolutions Blog",
+      "rss_url": "https://www.shippingsolutions.com/blog/rss.xml",
+      "tag": "Feedspot/ShippingSolutions"
+    },
+    {
+      "name": "Import and Trade Remedies Blog",
+      "rss_url": "https://www.hlimportlaw.com/feed/",
+      "tag": "Feedspot/TradeRemedies"
+    },
+    {
+      "name": "International Trade Insights (Husch Blackwell)",
+      "rss_url": "https://www.internationaltradeinsights.com/feed/",
+      "tag": "Feedspot/TradeInsights"
+    },
+    {
+      "name": "Customs & International Trade Law Expert",
+      "rss_url": "https://www.diabordelaperouse.com/feed/",
+      "tag": "Feedspot/CustomsLaw"
+    }
+  ],
+
+  "custom_rss": []
+}

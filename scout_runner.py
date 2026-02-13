@@ -174,6 +174,112 @@ def _google_news_rss(query: str, lang: str = "en", max_results: int = 10, source
         return []
 
 
+def _fetch_rss_feed(url: str, max_items: int = 10, source_tag: str = "RSS") -> List[Dict]:
+    """通用 RSS/Atom feed 解析器"""
+    import requests
+    import xml.etree.ElementTree as ET
+    from html import unescape
+    import re
+
+    try:
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        root = ET.fromstring(resp.text)
+
+        items = []
+        # RSS 2.0 格式
+        for item_el in root.findall(".//item")[:max_items]:
+            title = item_el.findtext("title", "")
+            link = item_el.findtext("link", "")
+            desc = unescape(item_el.findtext("description", ""))
+            pub_date = item_el.findtext("pubDate", "")
+            desc_clean = re.sub(r"<[^>]+>", "", desc)[:500]
+            items.append({
+                "title": title, "url": link, "content": desc_clean,
+                "source": source_tag, "published_date": pub_date, "keyword": "",
+            })
+
+        # Atom 格式（如果 RSS 没找到条目）
+        if not items:
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            for entry in root.findall(".//atom:entry", ns)[:max_items]:
+                title = entry.findtext("atom:title", "", ns)
+                link_el = entry.find("atom:link", ns)
+                link = link_el.get("href", "") if link_el is not None else ""
+                summary = unescape(entry.findtext("atom:summary", "", ns) or entry.findtext("atom:content", "", ns))
+                pub_date = entry.findtext("atom:published", "", ns) or entry.findtext("atom:updated", "", ns)
+                desc_clean = re.sub(r"<[^>]+>", "", summary)[:500]
+                items.append({
+                    "title": title, "url": link, "content": desc_clean,
+                    "source": source_tag, "published_date": pub_date, "keyword": "",
+                })
+
+        return items
+    except Exception as e:
+        logger.debug(f"RSS feed 抓取失败 ({source_tag}): {e}")
+        return []
+
+
+def search_subscriptions() -> List[Dict]:
+    """
+    从 pipeline/subscriptions.json 读取订阅源配置，
+    抓取 Google Alerts (via Google News RSS) + Feedspot 博客 RSS。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    sub_file = PROJECT_ROOT / "pipeline" / "subscriptions.json"
+    if not sub_file.exists():
+        return []
+
+    try:
+        with open(sub_file, "r", encoding="utf-8") as f:
+            subs = json.load(f)
+    except Exception as e:
+        logger.warning(f"订阅配置读取失败: {e}")
+        return []
+
+    results = []
+    futures = []
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        # Google Alerts → 转为 Google News RSS 查询
+        for alert in subs.get("google_alerts_cn", []):
+            query = alert.get("query", "")
+            lang = alert.get("lang", "zh")
+            tag = alert.get("tag", "GoogleAlerts")
+            if query:
+                futures.append(executor.submit(
+                    _google_news_rss, query, lang, 8, tag))
+
+        # Feedspot 博客 RSS
+        for blog in subs.get("feedspot_trade_blogs", []):
+            rss_url = blog.get("rss_url", "")
+            tag = blog.get("tag", "Feedspot")
+            if rss_url:
+                futures.append(executor.submit(
+                    _fetch_rss_feed, rss_url, 8, tag))
+
+        # 自定义 RSS
+        for custom in subs.get("custom_rss", []):
+            rss_url = custom.get("rss_url", "")
+            tag = custom.get("tag", "Custom")
+            if rss_url:
+                futures.append(executor.submit(
+                    _fetch_rss_feed, rss_url, 8, tag))
+
+        for future in as_completed(futures):
+            try:
+                items = future.result()
+                if isinstance(items, list):
+                    results.extend(items)
+            except Exception as e:
+                logger.debug(f"订阅源抓取异常: {e}")
+
+    if results:
+        logger.info(f"订阅源合计: {len(results)} 条")
+    return results
+
+
 def search_international(keywords: List[str], max_results: int = 10) -> List[Dict]:
     """
     海外轨：Brave + Tavily + Google News RSS 三路并行搜索
@@ -404,8 +510,13 @@ def run_scout(theme_override: Optional[str] = None) -> Optional[str]:
     domestic_results = search_domestic(theme_info.get("keywords_cn", []))
     logger.info(f"    国内结果: {len(domestic_results)} 条")
 
-    # 3. 合并 + URL 去重
-    all_results = intl_results + domestic_results
+    # 3. 订阅源（Google Alerts + Feedspot RSS）
+    logger.info(">>> 订阅源...")
+    sub_results = search_subscriptions()
+    logger.info(f"    订阅源结果: {len(sub_results)} 条")
+
+    # 4. 合并 + URL 去重
+    all_results = intl_results + domestic_results + sub_results
     if not all_results:
         logger.warning("Scout 无搜索结果，跳过")
         return None
