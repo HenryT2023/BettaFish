@@ -53,23 +53,29 @@ TRACK_TIERS: Dict[str, str] = {
 
 THEME_SCHEDULE: Dict[int, Dict] = {
     2:  {"theme": "Deep/Academic",           "track_tier": "premium",
-         "keywords_en": ["AI commerce research paper 2026", "cross-border trade technology study"],
-         "keywords_cn": ["跨境电商研究报告", "AI商业论文"]},
+         "keywords_en": ["AI commerce research paper 2026", "cross-border trade technology study",
+                         "ecommerce AI academic", "global trade digital transformation research"],
+         "keywords_cn": ["跨境电商研究报告", "AI商业论文", "数字贸易学术", "电商人工智能白皮书"]},
     6:  {"theme": "AI Tools & Agent",        "track_tier": "free",
-         "keywords_en": ["AI agent launch 2026", "new AI tool product", "AI automation startup"],
-         "keywords_cn": ["AI工具发布", "AI Agent新品", "人工智能自动化"]},
+         "keywords_en": ["AI agent launch 2026", "new AI tool product", "AI automation startup",
+                         "ChatGPT plugin new", "AI workflow tool release", "LLM application business"],
+         "keywords_cn": ["AI工具发布", "AI Agent新品", "人工智能自动化", "大模型应用落地", "AI办公效率工具"]},
     10: {"theme": "Cross-border E-commerce", "track_tier": "free",
-         "keywords_en": ["cross-border ecommerce trend 2026", "Amazon seller update", "TikTok Shop global"],
-         "keywords_cn": ["跨境电商趋势", "亚马逊卖家", "TikTok电商"]},
+         "keywords_en": ["cross-border ecommerce trend 2026", "Amazon seller update", "TikTok Shop global",
+                         "Temu Shein marketplace news", "Southeast Asia ecommerce", "global logistics DTC"],
+         "keywords_cn": ["跨境电商趋势", "亚马逊卖家", "TikTok电商", "拼多多Temu出海", "东南亚电商", "独立站DTC"]},
     14: {"theme": "SaaS & Digital Trade",    "track_tier": "premium",
-         "keywords_en": ["SaaS startup funding 2026", "digital trade platform", "B2B SaaS product launch"],
-         "keywords_cn": ["SaaS创业融资", "数字贸易平台", "B2B SaaS"]},
+         "keywords_en": ["SaaS startup funding 2026", "digital trade platform", "B2B SaaS product launch",
+                         "supply chain SaaS", "trade compliance software", "ERP ecommerce tool"],
+         "keywords_cn": ["SaaS创业融资", "数字贸易平台", "B2B SaaS", "供应链管理软件", "外贸ERP工具"]},
     18: {"theme": "Crypto & Web3",           "track_tier": "premium",
-         "keywords_en": ["crypto regulation update 2026", "Web3 commerce", "blockchain trade finance"],
-         "keywords_cn": ["加密货币监管", "Web3商业", "区块链贸易"]},
+         "keywords_en": ["crypto regulation update 2026", "Web3 commerce", "blockchain trade finance",
+                         "stablecoin cross-border payment", "DeFi real world asset", "crypto ETF news"],
+         "keywords_cn": ["加密货币监管", "Web3商业", "区块链贸易", "稳定币跨境支付", "数字货币政策"]},
     22: {"theme": "General Tech",            "track_tier": "free",
-         "keywords_en": ["trending tech product 2026", "Product Hunt top", "tech startup launch"],
-         "keywords_cn": ["科技新品", "技术趋势", "创业公司"]},
+         "keywords_en": ["trending tech product 2026", "Product Hunt top", "tech startup launch",
+                         "silicon valley funding news", "consumer tech breakthrough", "developer tool new"],
+         "keywords_cn": ["科技新品", "技术趋势", "创业公司", "硅谷融资", "消费电子新品", "开发者工具"]},
 }
 
 # 最大 Scout 条目数
@@ -127,90 +133,164 @@ def _brave_search(query: str, count: int = 10, lang: str = "en", source_tag: str
         return []
 
 
+def _google_news_rss(query: str, lang: str = "en", max_results: int = 10, source_tag: str = "GoogleNews") -> List[Dict]:
+    """
+    通过 Google News RSS 抓取新闻，免费无限调用。
+    lang: "en" 英文 / "zh" 中文
+    """
+    import requests
+    import xml.etree.ElementTree as ET
+    from html import unescape
+
+    if lang == "zh":
+        url = f"https://news.google.com/rss/search?q={query}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+    else:
+        url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+
+    try:
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        root = ET.fromstring(resp.text)
+        items = []
+        for item_el in root.findall(".//item")[:max_results]:
+            title = item_el.findtext("title", "")
+            link = item_el.findtext("link", "")
+            desc = unescape(item_el.findtext("description", ""))
+            pub_date = item_el.findtext("pubDate", "")
+            # 去掉 HTML 标签
+            import re
+            desc_clean = re.sub(r"<[^>]+>", "", desc)[:500]
+            items.append({
+                "title": title,
+                "url": link,
+                "content": desc_clean,
+                "source": source_tag,
+                "published_date": pub_date,
+                "keyword": query,
+            })
+        return items
+    except Exception as e:
+        logger.warning(f"Google News RSS '{query}' ({lang}) 失败: {e}")
+        return []
+
+
 def search_international(keywords: List[str], max_results: int = 10) -> List[Dict]:
     """
-    海外轨：优先 Brave Search API，备选 Tavily
-    返回标准化的搜索结果列表
+    海外轨：Brave + Tavily + Google News RSS 三路并行搜索
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     results = []
+    futures = []
 
-    # --- 优先 Brave Search ---
-    brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
-    if brave_key:
-        for kw in keywords[:3]:
-            items = _brave_search(kw, count=max_results, lang="en", source_tag="Brave/International")
-            results.extend(items)
-        if results:
-            logger.info(f"Brave Search 返回 {len(results)} 条结果")
-            return results
-        logger.warning("Brave Search 无结果，尝试 Tavily 备选")
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # --- Brave Search ---
+        brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
+        if brave_key:
+            for kw in keywords[:4]:
+                futures.append(executor.submit(
+                    _brave_search, kw, max_results, "en", "Brave/International"))
 
-    # --- 备选 Tavily ---
-    try:
-        from QueryEngine.tools.search import TavilyNewsAgency
-        tavily_key = settings.TAVILY_API_KEY
-        if not tavily_key:
-            logger.warning("TAVILY_API_KEY 也未配置，跳过海外搜索")
-            return results
+        # --- Tavily（并行，非备选）---
+        try:
+            tavily_key = getattr(settings, "TAVILY_API_KEY", None)
+            if tavily_key:
+                from QueryEngine.tools.search import TavilyNewsAgency
+                agency = TavilyNewsAgency(api_key=tavily_key)
+                def _tavily_search(kw):
+                    items = []
+                    try:
+                        response = agency.basic_search_news(kw, max_results=max_results)
+                        for r in response.results:
+                            items.append({
+                                "title": r.title or "",
+                                "url": r.url or "",
+                                "content": (r.content or "")[:500],
+                                "source": "Tavily/International",
+                                "published_date": r.published_date or "",
+                                "keyword": kw,
+                            })
+                    except Exception as e:
+                        logger.warning(f"Tavily 搜索 '{kw}' 失败: {e}")
+                    return items
+                for kw in keywords[:3]:
+                    futures.append(executor.submit(_tavily_search, kw))
+        except Exception:
+            pass
 
-        agency = TavilyNewsAgency(api_key=tavily_key)
-        for kw in keywords[:3]:
+        # --- Google News RSS ---
+        for kw in keywords[:4]:
+            futures.append(executor.submit(
+                _google_news_rss, kw, "en", max_results, "GoogleNews/International"))
+
+        # 收集所有结果
+        for future in as_completed(futures):
             try:
-                response = agency.basic_search_news(kw, max_results=max_results)
-                for r in response.results:
-                    results.append({
-                        "title": r.title or "",
-                        "url": r.url or "",
-                        "content": (r.content or "")[:500],
-                        "source": "Tavily/International",
-                        "published_date": r.published_date or "",
-                        "keyword": kw,
-                    })
+                items = future.result()
+                if isinstance(items, list):
+                    results.extend(items)
             except Exception as e:
-                logger.warning(f"Tavily 搜索 '{kw}' 失败: {e}")
-    except ImportError as e:
-        logger.error(f"QueryEngine 导入失败: {e}")
-    except Exception as e:
-        logger.error(f"海外搜索异常: {e}")
+                logger.warning(f"搜索任务异常: {e}")
 
+    logger.info(f"海外三路搜索合计: {len(results)} 条")
     return results
 
 
 def search_domestic(keywords: List[str]) -> List[Dict]:
     """
-    国内轨：优先 Brave 中文搜索，备选 MindSpider
+    国内轨：Brave CN + Google News RSS CN + MindSpider 三路并行
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     results = []
+    futures = []
 
-    # --- 优先 Brave 中文搜索 ---
-    brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
-    if brave_key:
-        for kw in keywords[:3]:
-            items = _brave_search(kw, count=8, lang="auto", source_tag="Brave/Domestic")
-            results.extend(items)
-        if results:
-            logger.info(f"Brave 中文搜索返回 {len(results)} 条结果")
-            return results
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # --- Brave 中文搜索 ---
+        brave_key = getattr(settings, "BRAVE_API_KEY", None) or os.getenv("BRAVE_API_KEY", "")
+        if brave_key:
+            for kw in keywords[:4]:
+                futures.append(executor.submit(
+                    _brave_search, kw, 8, "auto", "Brave/Domestic"))
 
-    # --- 备选 MindSpider ---
-    try:
-        from MindSpider.BroadTopicExtraction.get_today_news import get_today_news
-        news_items = get_today_news()
-        if news_items:
-            for item in news_items[:10]:
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "content": (item.get("content", "") or item.get("summary", ""))[:500],
-                    "source": "MindSpider/Domestic",
-                    "published_date": item.get("date", ""),
-                    "keyword": "",
-                })
-    except ImportError:
-        logger.info("MindSpider 未配置或不可用，跳过")
-    except Exception as e:
-        logger.warning(f"国内搜索异常: {e}")
+        # --- Google News RSS 中文 ---
+        for kw in keywords[:4]:
+            futures.append(executor.submit(
+                _google_news_rss, kw, "zh", 10, "GoogleNews/Domestic"))
 
+        # --- MindSpider ---
+        def _mindspider_search():
+            items = []
+            try:
+                from MindSpider.BroadTopicExtraction.get_today_news import get_today_news
+                news_items = get_today_news()
+                if news_items:
+                    for item in news_items[:10]:
+                        items.append({
+                            "title": item.get("title", ""),
+                            "url": item.get("url", ""),
+                            "content": (item.get("content", "") or item.get("summary", ""))[:500],
+                            "source": "MindSpider/Domestic",
+                            "published_date": item.get("date", ""),
+                            "keyword": "",
+                        })
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.warning(f"MindSpider 搜索异常: {e}")
+            return items
+        futures.append(executor.submit(_mindspider_search))
+
+        # 收集所有结果
+        for future in as_completed(futures):
+            try:
+                items = future.result()
+                if isinstance(items, list):
+                    results.extend(items)
+            except Exception as e:
+                logger.warning(f"国内搜索任务异常: {e}")
+
+    logger.info(f"国内三路搜索合计: {len(results)} 条")
     return results
 
 
