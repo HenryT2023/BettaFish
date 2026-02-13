@@ -1610,7 +1610,7 @@ if __name__ == '__main__':
     logger.info(f"Flask服务器已启动，访问地址: http://{HOST}:{PORT}")
     
     try:
-        socketio.run(app, host=HOST, port=PORT, debug=False)
+        socketio.run(app, host=HOST, port=PORT, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
         logger.info("\n正在关闭应用...")
         cleanup_processes()
