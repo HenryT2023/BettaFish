@@ -58,7 +58,7 @@ def generate_growth_pack(article_md: str, analysis: Dict) -> Optional[str]:
 
     api_key = settings.REPORT_ENGINE_API_KEY or settings.INSIGHT_ENGINE_API_KEY
     base_url = settings.REPORT_ENGINE_BASE_URL or settings.INSIGHT_ENGINE_BASE_URL
-    model = settings.REPORT_ENGINE_MODEL_NAME or settings.INSIGHT_ENGINE_MODEL_NAME or "qwen-max"
+    model = os.getenv("GROWTH_MODEL_NAME") or settings.REPORT_ENGINE_MODEL_NAME or settings.INSIGHT_ENGINE_MODEL_NAME or "qwen-max"
 
     if not api_key:
         logger.error("无可用 LLM API Key")

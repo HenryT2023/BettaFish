@@ -412,7 +412,7 @@ def score_items_with_llm(items: List[Dict], theme: str) -> List[Dict]:
 
     api_key = settings.QUERY_ENGINE_API_KEY or settings.INSIGHT_ENGINE_API_KEY
     base_url = settings.QUERY_ENGINE_BASE_URL or settings.INSIGHT_ENGINE_BASE_URL
-    model = settings.QUERY_ENGINE_MODEL_NAME or settings.INSIGHT_ENGINE_MODEL_NAME or "qwen-max"
+    model = os.getenv("SCOUT_MODEL_NAME") or settings.QUERY_ENGINE_MODEL_NAME or settings.INSIGHT_ENGINE_MODEL_NAME or "qwen-max"
 
     if not api_key:
         logger.error("无可用 LLM API Key，跳过评分")
