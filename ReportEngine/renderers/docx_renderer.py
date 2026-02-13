@@ -166,22 +166,139 @@ class DocxRenderer:
 
     def insert_images(self, image_paths: List[str], position: str = "end"):
         """
-        在文档中插入图片。
-        position: 'after_title' = 标题下方, 'end' = 文末
+        按图片类型智能插入到文章对应位置：
+        - cover → 第一个 H1 标题之后
+        - trend → 第一个 H2 之后（正文起始处）
+        - gap / gap-ai → 含"信息差"/"数据"/"对比"的 H2 之后
+        - 其他 → 文末兜底
         """
-        for img_path in image_paths:
-            if not Path(img_path).exists():
-                logger.warning(f"图片不存在，跳过: {img_path}")
+        if not image_paths:
+            return
+
+        # 按文件名分类
+        cover, trend, gap_imgs, others = [], [], [], []
+        for p in image_paths:
+            if not Path(p).exists():
+                logger.warning(f"图片不存在，跳过: {p}")
                 continue
+            name = Path(p).stem.lower()
+            if "cover" in name:
+                cover.append(p)
+            elif "trend" in name:
+                trend.append(p)
+            elif "gap" in name:
+                gap_imgs.append(p)
+            else:
+                others.append(p)
+
+        paragraphs = self.doc.paragraphs
+
+        # 找锚点段落索引
+        first_h1_idx = None
+        first_h2_idx = None
+        gap_h2_idx = None
+        last_h2_idx = None
+        gap_keywords = ["信息差", "数据", "对比", "海外", "国内", "gap"]
+
+        for i, para in enumerate(paragraphs):
+            style_name = (para.style.name or "").lower()
+            is_heading = "heading" in style_name
+            if not is_heading:
+                continue
+            text_lower = para.text.lower()
+            if "heading 1" in style_name and first_h1_idx is None:
+                first_h1_idx = i
+            if "heading 2" in style_name:
+                if first_h2_idx is None:
+                    first_h2_idx = i
+                last_h2_idx = i
+                if gap_h2_idx is None and any(kw in text_lower for kw in gap_keywords):
+                    gap_h2_idx = i
+
+        # gap 图兜底：如果没找到匹配的 H2，放在倒数第二个 H2 后
+        if gap_h2_idx is None and last_h2_idx is not None:
+            gap_h2_idx = last_h2_idx
+
+        # 插入（从后往前插，避免索引偏移）
+        insertions = []  # [(paragraph_index, [image_paths])]
+
+        if cover and first_h1_idx is not None:
+            insertions.append((first_h1_idx, cover))
+        elif cover:
+            insertions.append((0, cover))
+
+        if trend and first_h2_idx is not None:
+            insertions.append((first_h2_idx, trend))
+
+        if gap_imgs and gap_h2_idx is not None:
+            insertions.append((gap_h2_idx, gap_imgs))
+
+        # 从后往前排序，后面的先插入
+        insertions.sort(key=lambda x: -x[0])
+
+        for para_idx, imgs in insertions:
+            self._insert_images_after_paragraph(paragraphs[para_idx], imgs)
+
+        # 兜底：未匹配的图片 append 到文末
+        for img_path in others:
+            self._append_image_at_end(img_path)
+
+    def _insert_images_after_paragraph(self, anchor_para, image_paths: List[str]):
+        """在指定段落之后插入图片（操作底层 XML）"""
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        from io import BytesIO
+        from docx.shared import Emu
+
+        # 从后往前插入以保持顺序
+        for img_path in reversed(image_paths):
             try:
-                self.doc.add_paragraph()  # 空行间距
-                self.doc.add_picture(img_path, width=Inches(5.5))
-                # 图片居中
-                last_paragraph = self.doc.paragraphs[-1]
-                last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                logger.info(f"图片已插入 DOCX: {Path(img_path).name}")
+                # 创建新段落元素
+                new_para = OxmlElement("w:p")
+                # 居中对齐
+                pPr = OxmlElement("w:pPr")
+                jc = OxmlElement("w:jc")
+                jc.set(qn("w:val"), "center")
+                pPr.append(jc)
+                new_para.append(pPr)
+
+                # 创建 run
+                run_elem = OxmlElement("w:r")
+                new_para.append(run_elem)
+
+                # 在锚点段落之后插入空段落 + 图片段落
+                anchor_para._element.addnext(new_para)
+
+                # 用 python-docx 的 add_picture 方式添加图片到 run
+                from docx.shared import Inches as _Inches
+                # 通过临时段落方式获取图片 relationship
+                tmp_para = self.doc.add_paragraph()
+                run = tmp_para.add_run()
+                run.add_picture(img_path, width=_Inches(5.5))
+                tmp_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                # 把临时段落的 XML 移到正确位置
+                anchor_para._element.addnext(tmp_para._element)
+
+                # 删除之前插入的空 new_para
+                new_para.getparent().remove(new_para)
+
+                logger.info(f"图片已插入 DOCX（就近）: {Path(img_path).name}")
             except Exception as e:
-                logger.warning(f"插入图片失败 {img_path}: {e}")
+                logger.warning(f"就近插入图片失败 {img_path}: {e}")
+                # 降级到文末
+                self._append_image_at_end(img_path)
+
+    def _append_image_at_end(self, img_path: str):
+        """兜底：在文末追加图片"""
+        try:
+            self.doc.add_paragraph()
+            self.doc.add_picture(img_path, width=Inches(5.5))
+            last_paragraph = self.doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            logger.info(f"图片已插入 DOCX（文末）: {Path(img_path).name}")
+        except Exception as e:
+            logger.warning(f"插入图片失败 {img_path}: {e}")
 
     def save(self, output_path: str) -> str:
         """保存 .docx 文件"""
