@@ -26,8 +26,8 @@ from loguru import logger
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 # Nano Banana 模型名（标准版用 Flash Image，Pro 版用 gemini-3-pro-image-preview）
-MODEL_COVER = "gemini-2.5-flash-image"
-MODEL_DIAGRAM = "gemini-2.5-flash-image"
+MODEL_COVER = "gemini-3-pro-image-preview"
+MODEL_DIAGRAM = "gemini-3-pro-image-preview"
 
 # 风格池：每次随机组合，避免封面图千篇一律
 _PALETTES = [

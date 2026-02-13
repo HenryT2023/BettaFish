@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.bettafish.web</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/tangheng/BettaFish/app.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/tangheng/BettaFish</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONIOENCODING</key>
+        <string>utf-8</string>
+        <key>PYTHONUTF8</key>
+        <string>1</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/Users/tangheng/Library/Python/3.9/bin</string>
+    </dict>
+
+    <!-- 开机自启 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 崩溃自动重启 -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- 重启间隔（秒），防止疯狂重启 -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- 日志输出 -->
+    <key>StandardOutPath</key>
+    <string>/Users/tangheng/BettaFish/pipeline/bettafish-web.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/tangheng/BettaFish/pipeline/bettafish-web-error.log</string>
+</dict>
+</plist>

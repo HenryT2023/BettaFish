@@ -59,7 +59,7 @@ def main():
 
     # ----- 配置被硬编码 -----
     # 强制使用 Gemini
-    model_name = settings.MEDIA_ENGINE_MODEL_NAME or "gemini-2.5-pro"
+    model_name = settings.MEDIA_ENGINE_MODEL_NAME or "gemini-3-pro-preview"
     # 默认高级配置
     max_reflections = 2
     max_content_length = 20000

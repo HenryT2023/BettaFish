@@ -47,9 +47,9 @@ class Settings(BaseSettings):
     INSIGHT_ENGINE_MODEL_NAME: str = Field("kimi-k2-0711-preview", description="Insight Agent LLM 模型名称，例如 kimi-k2-0711-preview")
     
     # Media Agent（推荐Gemini，推荐中转厂商：https://aihubmix.com/?aff=8Ds9）
-    MEDIA_ENGINE_API_KEY: Optional[str] = Field(None, description="Media Agent（推荐 gemini-2.5-pro，中转厂商申请地址：https://aihubmix.com/?aff=8Ds9）API 密钥")
+    MEDIA_ENGINE_API_KEY: Optional[str] = Field(None, description="Media Agent（推荐 gemini-3-pro-preview，中转厂商申请地址：https://aihubmix.com/?aff=8Ds9）API 密钥")
     MEDIA_ENGINE_BASE_URL: Optional[str] = Field("https://aihubmix.com/v1", description="Media Agent LLM BaseUrl，可根据中转服务调整")
-    MEDIA_ENGINE_MODEL_NAME: str = Field("gemini-2.5-pro", description="Media Agent LLM 模型名称，如 gemini-2.5-pro")
+    MEDIA_ENGINE_MODEL_NAME: str = Field("gemini-3-pro-preview", description="Media Agent LLM 模型名称，如 gemini-3-pro-preview")
     
     # Query Agent（推荐DeepSeek，申请地址：https://www.deepseek.com/）
     QUERY_ENGINE_API_KEY: Optional[str] = Field(None, description="Query Agent（推荐 deepseek，官方申请地址：https://platform.deepseek.com/）API 密钥")
@@ -57,9 +57,9 @@ class Settings(BaseSettings):
     QUERY_ENGINE_MODEL_NAME: str = Field("deepseek-chat", description="Query Agent LLM 模型名称，如 deepseek-reasoner")
     
     # Report Agent（推荐Gemini，推荐中转厂商：https://aihubmix.com/?aff=8Ds9）
-    REPORT_ENGINE_API_KEY: Optional[str] = Field(None, description="Report Agent（推荐 gemini-2.5-pro，中转厂商申请地址：https://aihubmix.com/?aff=8Ds9）API 密钥")
+    REPORT_ENGINE_API_KEY: Optional[str] = Field(None, description="Report Agent（推荐 gemini-3-pro-preview，中转厂商申请地址：https://aihubmix.com/?aff=8Ds9）API 密钥")
     REPORT_ENGINE_BASE_URL: Optional[str] = Field("https://aihubmix.com/v1", description="Report Agent LLM BaseUrl，可根据中转服务调整")
-    REPORT_ENGINE_MODEL_NAME: str = Field("gemini-2.5-pro", description="Report Agent LLM 模型名称，如 gemini-2.5-pro")
+    REPORT_ENGINE_MODEL_NAME: str = Field("gemini-3-pro-preview", description="Report Agent LLM 模型名称，如 gemini-3-pro-preview")
 
     # MindSpider Agent（推荐Deepseek，官方申请地址：https://platform.deepseek.com/）
     MINDSPIDER_API_KEY: Optional[str] = Field(None, description="MindSpider Agent（推荐 deepseek，官方申请地址：https://platform.deepseek.com/）API 密钥")

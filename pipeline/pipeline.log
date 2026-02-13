@@ -1,0 +1,16 @@
+2026-02-13 00:33:24.529 | INFO     | scout_runner:run_scout:243 - === Scout 开始 | batch=20260213-00 | theme=AI Agent ===
+2026-02-13 00:33:24.529 | INFO     | scout_runner:run_scout:246 - >>> 海外搜索...
+2026-02-13 00:33:24.679 | ERROR    | scout_runner:search_international:112 - QueryEngine 导入失败: Tavily库未安装，请运行 `pip install tavily-python` 进行安装。
+2026-02-13 00:33:24.679 | INFO     | scout_runner:run_scout:248 -     海外结果: 0 条
+2026-02-13 00:33:24.679 | INFO     | scout_runner:run_scout:251 - >>> 国内搜索...
+2026-02-13 00:33:24.762 | INFO     | scout_runner:search_domestic:140 - MindSpider 未配置或不可用，跳过国内搜索
+2026-02-13 00:33:24.762 | INFO     | scout_runner:run_scout:253 -     国内结果: 0 条
+2026-02-13 00:33:24.762 | WARNING  | scout_runner:run_scout:258 - Scout 无搜索结果，跳过
+2026-02-13 00:33:40.305 | INFO     | scout_runner:run_scout:243 - === Scout 开始 | batch=20260213-00 | theme=AI Agent ===
+2026-02-13 00:33:40.305 | INFO     | scout_runner:run_scout:246 - >>> 海外搜索...
+2026-02-13 00:33:41.242 | WARNING  | scout_runner:search_international:90 - TAVILY_API_KEY 未配置，跳过海外搜索
+2026-02-13 00:33:41.242 | INFO     | scout_runner:run_scout:248 -     海外结果: 0 条
+2026-02-13 00:33:41.243 | INFO     | scout_runner:run_scout:251 - >>> 国内搜索...
+2026-02-13 00:33:41.296 | INFO     | scout_runner:search_domestic:140 - MindSpider 未配置或不可用，跳过国内搜索
+2026-02-13 00:33:41.296 | INFO     | scout_runner:run_scout:253 -     国内结果: 0 条
+2026-02-13 00:33:41.296 | WARNING  | scout_runner:run_scout:258 - Scout 无搜索结果，跳过

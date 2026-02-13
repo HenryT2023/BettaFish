@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     
     MEDIA_ENGINE_API_KEY: str = Field(None, description="Media Agent（推荐Gemini，这里我用了一个中转厂商，你也可以换成你自己的，申请地址：https://www.chataiapi.com/）API密钥")
     MEDIA_ENGINE_BASE_URL: Optional[str] = Field("https://www.chataiapi.com/v1", description="Media Agent LLM接口BaseUrl")
-    MEDIA_ENGINE_MODEL_NAME: str = Field("gemini-2.5-pro", description="Media Agent LLM模型名称，如gemini-2.5-pro")
+    MEDIA_ENGINE_MODEL_NAME: str = Field("gemini-3-pro-preview", description="Media Agent LLM模型名称，如gemini-3-pro-preview")
     
     BOCHA_WEB_SEARCH_API_KEY: Optional[str] = Field(None, description="Bocha Web Search API Key")
     BOCHA_API_KEY: Optional[str] = Field(None, description="Bocha 兼容键（别名）")
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     
     REPORT_ENGINE_API_KEY: str = Field(None, description="Report Agent（推荐Gemini，这里我用了一个中转厂商，你也可以换成你自己的，申请地址：https://www.chataiapi.com/）API密钥")
     REPORT_ENGINE_BASE_URL: Optional[str] = Field("https://www.chataiapi.com/v1", description="Report Agent LLM接口BaseUrl")
-    REPORT_ENGINE_MODEL_NAME: str = Field("gemini-2.5-pro", description="Report Agent LLM模型，如gemini-2.5-pro")
+    REPORT_ENGINE_MODEL_NAME: str = Field("gemini-3-pro-preview", description="Report Agent LLM模型，如gemini-3-pro-preview")
     
     FORUM_HOST_API_KEY: str = Field(None, description="Forum Host（Qwen3最新模型，这里我使用了硅基流动这个平台，申请地址：https://cloud.siliconflow.cn/）API密钥")
     FORUM_HOST_BASE_URL: Optional[str] = Field("https://api.siliconflow.cn/v1", description="Forum Host LLM BaseUrl")
