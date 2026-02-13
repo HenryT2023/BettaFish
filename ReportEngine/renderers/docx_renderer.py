@@ -99,13 +99,24 @@ class DocxRenderer:
             # 无序列表
             if line.lstrip().startswith("- ") or line.lstrip().startswith("* "):
                 list_items = []
-                while i < len(lines) and (lines[i].lstrip().startswith("- ") or lines[i].lstrip().startswith("* ")):
-                    stripped = lines[i].lstrip()
-                    # 精确去掉 "- " 或 "* " 前缀（2字符），保留 ** bold 标记
-                    item_text = stripped[2:].strip() if len(stripped) > 2 else ""
-                    if item_text:  # 跳过空内容项
-                        list_items.append(item_text)
-                    i += 1
+                while i < len(lines):
+                    cur = lines[i].lstrip()
+                    if cur.startswith("- ") or cur.startswith("* "):
+                        item_text = cur[2:].strip() if len(cur) > 2 else ""
+                        if item_text:
+                            list_items.append(item_text)
+                        i += 1
+                    elif not lines[i].strip():
+                        # 空行：如果下一个非空行仍是列表项，则跳过继续
+                        peek = i + 1
+                        while peek < len(lines) and not lines[peek].strip():
+                            peek += 1
+                        if peek < len(lines) and (lines[peek].lstrip().startswith("- ") or lines[peek].lstrip().startswith("* ")):
+                            i += 1
+                        else:
+                            break
+                    else:
+                        break
                 for item in list_items:
                     p = self.doc.add_paragraph(style="List Bullet")
                     self._add_rich_text(p, item)
@@ -118,8 +129,18 @@ class DocxRenderer:
                     stripped = lines[i].lstrip()
                     if len(stripped) > 2 and stripped[0].isdigit() and ". " in stripped[:5]:
                         item_text = stripped.split(". ", 1)[-1].strip()
-                        list_items.append(item_text)
+                        if item_text:
+                            list_items.append(item_text)
                         i += 1
+                    elif not lines[i].strip():
+                        # 空行：如果下一个非空行仍是有序列表项，则跳过继续
+                        peek = i + 1
+                        while peek < len(lines) and not lines[peek].strip():
+                            peek += 1
+                        if peek < len(lines) and len(lines[peek].lstrip()) > 2 and lines[peek].lstrip()[0].isdigit() and ". " in lines[peek].lstrip()[:5]:
+                            i += 1
+                        else:
+                            break
                     else:
                         break
                 for item in list_items:
@@ -368,6 +389,8 @@ class DocxRenderer:
         import re
         parts = re.split(r"(\*\*[^*]+\*\*|\*[^*]+\*)", text)
         for part in parts:
+            if not part:
+                continue
             if part.startswith("**") and part.endswith("**"):
                 run = paragraph.add_run(part[2:-2])
                 run.bold = True

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -27,6 +28,38 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 # Nano Banana 模型名（标准版用 Flash Image，Pro 版用 gemini-3-pro-image-preview）
 MODEL_COVER = "gemini-2.5-flash-image"
 MODEL_DIAGRAM = "gemini-2.5-flash-image"
+
+# 风格池：每次随机组合，避免封面图千篇一律
+_PALETTES = [
+    "deep blue and teal with white accents",
+    "warm amber and burnt orange with cream highlights",
+    "forest green and gold with dark slate background",
+    "rich crimson and champagne gold on charcoal",
+    "soft lavender and silver with pearl white",
+    "midnight indigo and electric cyan on matte black",
+    "coral pink and sage green with sandy beige",
+    "steel grey and bright yellow with clean white",
+]
+_COMPOSITIONS = [
+    "isometric 3D perspective with floating elements",
+    "top-down bird's-eye view with layered depth",
+    "split-screen comparison layout with central divider",
+    "radial burst composition emanating from center",
+    "flowing wave patterns with smooth gradients",
+    "interconnected node network with glowing edges",
+    "stacked horizontal bands with subtle parallax",
+    "diagonal slash composition with bold contrast",
+]
+_METAPHORS = [
+    "abstract geometric shapes representing data flow and global commerce",
+    "stylized world map fragments with trade route lines",
+    "interlocking gears and circuit patterns symbolizing supply chains",
+    "rising bar charts morphing into city skylines",
+    "shipping containers and cargo ships in minimalist silhouette",
+    "digital currency symbols flowing through fiber optic streams",
+    "puzzle pieces connecting across continents",
+    "layered transparent cards showing market dashboards",
+]
 
 
 def _get_client():
@@ -66,12 +99,16 @@ def generate_cover_image(
         return None
 
     kw_str = ", ".join(keywords[:5])
+    palette = random.choice(_PALETTES)
+    composition = random.choice(_COMPOSITIONS)
+    metaphor = random.choice(_METAPHORS)
     prompt = (
-        f"A modern, clean digital illustration for a business tech article. "
+        f"A modern, clean digital illustration for a business article. "
         f"Topic: {topic}. Keywords: {kw_str}. "
-        f"Style: minimalist flat design with subtle gradients, tech-inspired color palette "
-        f"(deep blue, teal, white accents), abstract geometric shapes representing data flow "
-        f"and global commerce. No text or words in the image. "
+        f"Color palette: {palette}. "
+        f"Composition: {composition}. "
+        f"Visual elements: {metaphor}. "
+        f"No text or words in the image. "
         f"Professional, suitable for a WeChat public account cover image."
     )
 
@@ -120,13 +157,21 @@ def generate_gap_diagram(
     if not client:
         return None
 
+    palette = random.choice(_PALETTES)
+    composition = random.choice([
+        "Venn diagram overlap with glowing intersection",
+        "two-column comparison with bridging arrows",
+        "seesaw balance scale with weighted elements",
+        "dual radar charts side by side",
+        "iceberg diagram showing visible vs hidden layers",
+    ])
     prompt = (
         f"A clean infographic diagram showing information asymmetry between two markets. "
-        f"Left side: 'International' (blue theme) — {international_view[:80]}. "
-        f"Right side: 'Domestic/China' (red theme) — {domestic_view[:80]}. "
-        f"Center: a gap/bridge visual representing the insight: {gap_insight[:80]}. "
-        f"Style: modern flat design, node-and-arrow diagram, minimal text labels in English only, "
-        f"white background, professional business infographic look. "
+        f"Left side: 'International' — {international_view[:80]}. "
+        f"Right side: 'Domestic/China' — {domestic_view[:80]}. "
+        f"Center: a gap/bridge visual representing: {gap_insight[:80]}. "
+        f"Layout: {composition}. Color palette: {palette}. "
+        f"Minimal text labels in English only, professional business infographic look. "
         f"No Chinese characters. No watermarks."
     )
 
