@@ -423,10 +423,26 @@ def _trigger_wechat_publisher(docx_path: str):
         return
     try:
         logger.info(">>> 触发 wechat-publisher 创建公众号草稿...")
+        # subprocess 不继承 shell 环境，需要手动合并 os.environ
+        env = os.environ.copy()
+        # 从 ~/.zshrc 读取微信/千问相关环境变量（cron 场景下 .zshrc 不会被 source）
+        zshrc = Path.home() / ".zshrc"
+        if zshrc.exists():
+            import re
+            with open(zshrc, "r") as f:
+                for line in f:
+                    m = re.match(r'^export\s+(\w+)=["\']?([^"\']*)["\']?', line.strip())
+                    if m and m.group(1) in (
+                        "WECHAT_APP_ID", "WECHAT_APP_SECRET",
+                        "DASHSCOPE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+                        "GEMINI_API_KEY",
+                    ):
+                        env[m.group(1)] = m.group(2)
         result = subprocess.run(
             ["/usr/bin/python3", str(wechat_script), "--file", docx_path],
             capture_output=True, text=True, timeout=120,
             cwd=str(wechat_script.parent),
+            env=env,
         )
         if result.returncode == 0:
             logger.info(">>> wechat-publisher 执行成功")
