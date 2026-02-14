@@ -417,7 +417,7 @@ def _generate_premium_addon(analysis: Dict, date_str: str, title: str):
 def _trigger_wechat_publisher(docx_path: str):
     """直接调用 wechat_publisher_cron.py --file 创建公众号草稿"""
     import subprocess
-    wechat_script = Path.home() / "HenryBot" / "wechat_publisher_cron.py"
+    wechat_script = Path.home() / "wechat_publisher" / "wechat_publisher_cron.py"
     if not wechat_script.exists():
         logger.info("wechat_publisher_cron.py 不存在，跳过公众号发布")
         return
