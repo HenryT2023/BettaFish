@@ -163,7 +163,13 @@ def analyze_with_llm(items: List[Dict], mode: str = "lite") -> Dict:
 2. outline 每个小节必须有明确的 title（中文），不能为空
 3. headlines 必须是3个不同的标题，编号不同
 4. verifiable_facts 只填原文中出现的数字、人名、公司名、日期
-5. 只返回 JSON，不要其他文字"""
+5. 只返回 JSON，不要其他文字
+
+选题硬性要求（不满足则降 3 分）：
+6. 选定话题必须包含至少一个具体事件（谁、什么时候、做了什么），纯观点/趋势/预测类话题不选
+7. 优先选有明确数字（金额、百分比、日期）的话题，有具体数字的 score +3
+8. 纯"盘点""趋势""展望"类话题 score -2，除非有硬新闻事件做支撑
+9. headlines 要像朋友圈转发时会加的一句话，不要像论文标题"""
 
     mode_hint = ""
     if mode == "full":

@@ -102,14 +102,16 @@ def generate_cover_image(
     palette = random.choice(_PALETTES)
     composition = random.choice(_COMPOSITIONS)
     metaphor = random.choice(_METAPHORS)
+    # 从 topic 中提取短标题（8字以内）
+    short_title = topic[:8] if len(topic) > 8 else topic
     prompt = (
-        f"A modern, clean digital illustration for a business article. "
-        f"Topic: {topic}. Keywords: {kw_str}. "
-        f"Color palette: {palette}. "
-        f"Composition: {composition}. "
-        f"Visual elements: {metaphor}. "
-        f"No text or words in the image. "
-        f"Professional, suitable for a WeChat public account cover image."
+        f"生成一张公众号封面图。"
+        f"主题：{topic}。关键词：{kw_str}。"
+        f"风格：商业科技杂志封面，扁平插画，{palette}。"
+        f"构图：{composition}。"
+        f"视觉元素：{metaphor}。"
+        f"图片正中央必须包含中文大标题「{short_title}」，白色粗体字，清晰可读。"
+        f"不要出现人脸。专业公众号封面风格。"
     )
 
     try:
@@ -159,20 +161,21 @@ def generate_gap_diagram(
 
     palette = random.choice(_PALETTES)
     composition = random.choice([
-        "Venn diagram overlap with glowing intersection",
-        "two-column comparison with bridging arrows",
-        "seesaw balance scale with weighted elements",
-        "dual radar charts side by side",
-        "iceberg diagram showing visible vs hidden layers",
+        "维恩图交叉发光区域",
+        "双栏对比加桥梁箭头连接",
+        "天平秤两侧加权元素",
+        "双雷达图并排对比",
+        "冰山图展示可见层与隐藏层",
     ])
     prompt = (
-        f"A clean infographic diagram showing information asymmetry between two markets. "
-        f"Left side: 'International' — {international_view[:80]}. "
-        f"Right side: 'Domestic/China' — {domestic_view[:80]}. "
-        f"Center: a gap/bridge visual representing: {gap_insight[:80]}. "
-        f"Layout: {composition}. Color palette: {palette}. "
-        f"Minimal text labels in English only, professional business infographic look. "
-        f"No Chinese characters. No watermarks."
+        f"生成一张信息差对比图。"
+        f"左侧标注「海外」：{international_view[:80]}。"
+        f"右侧标注「国内」：{domestic_view[:80]}。"
+        f"中间用箭头或桥梁表示信息差：{gap_insight[:80]}。"
+        f"构图：{composition}。配色：{palette}。"
+        f"关键标签用中文。底部小字：东旺数贸。"
+        f"风格：深色背景，数据仪表盘风格，专业商业信息图。"
+        f"不要出现水印。"
     )
 
     try:

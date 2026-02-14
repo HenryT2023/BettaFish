@@ -166,17 +166,18 @@ class DocxRenderer:
 
     def insert_images(self, image_paths: List[str], position: str = "end"):
         """
-        按图片类型智能插入到文章对应位置：
+        按图片类型智能分散插入到文章对应位置（每个锚点最多1张）：
         - cover → 第一个 H1 标题之后
-        - trend → 第一个 H2 之后（正文起始处）
-        - gap / gap-ai → 含"信息差"/"数据"/"对比"的 H2 之后
-        - 其他 → 文末兜底
+        - trend → 第一个 H2 之后
+        - gap (matplotlib) → 含"信息差"/"数据"/"对比"关键词的 H2 之后
+        - gap-ai → 下一个不同的 H2 之后（避免与 gap 堆叠）
+        - 其他 → 均匀分散到剩余 H2 之后
         """
         if not image_paths:
             return
 
         # 按文件名分类
-        cover, trend, gap_imgs, others = [], [], [], []
+        cover, trend, gap_chart, gap_ai, others = [], [], [], [], []
         for p in image_paths:
             if not Path(p).exists():
                 logger.warning(f"图片不存在，跳过: {p}")
@@ -186,62 +187,83 @@ class DocxRenderer:
                 cover.append(p)
             elif "trend" in name:
                 trend.append(p)
+            elif "gap-ai" in name or "gap_ai" in name:
+                gap_ai.append(p)
             elif "gap" in name:
-                gap_imgs.append(p)
+                gap_chart.append(p)
             else:
                 others.append(p)
 
         paragraphs = self.doc.paragraphs
 
-        # 找锚点段落索引
+        # 收集所有 H2 索引
         first_h1_idx = None
-        first_h2_idx = None
-        gap_h2_idx = None
-        last_h2_idx = None
+        h2_indices = []
         gap_keywords = ["信息差", "数据", "对比", "海外", "国内", "gap"]
 
         for i, para in enumerate(paragraphs):
             style_name = (para.style.name or "").lower()
-            is_heading = "heading" in style_name
-            if not is_heading:
-                continue
-            text_lower = para.text.lower()
             if "heading 1" in style_name and first_h1_idx is None:
                 first_h1_idx = i
             if "heading 2" in style_name:
-                if first_h2_idx is None:
-                    first_h2_idx = i
-                last_h2_idx = i
-                if gap_h2_idx is None and any(kw in text_lower for kw in gap_keywords):
-                    gap_h2_idx = i
+                h2_indices.append(i)
 
-        # gap 图兜底：如果没找到匹配的 H2，放在倒数第二个 H2 后
-        if gap_h2_idx is None and last_h2_idx is not None:
-            gap_h2_idx = last_h2_idx
+        # 找 gap 关键词匹配的 H2
+        gap_h2_idx = None
+        for idx in h2_indices:
+            text_lower = paragraphs[idx].text.lower()
+            if any(kw in text_lower for kw in gap_keywords):
+                gap_h2_idx = idx
+                break
 
-        # 插入（从后往前插，避免索引偏移）
-        insertions = []  # [(paragraph_index, [image_paths])]
+        # 分配锚点（每个锚点最多绑定1张图，避免堆叠）
+        used_h2 = set()
+        insertions = []  # [(paragraph_index, image_path)]
 
-        if cover and first_h1_idx is not None:
-            insertions.append((first_h1_idx, cover))
-        elif cover:
-            insertions.append((0, cover))
+        # cover → H1 之后
+        if cover:
+            anchor = first_h1_idx if first_h1_idx is not None else 0
+            insertions.append((anchor, cover[0]))
 
-        if trend and first_h2_idx is not None:
-            insertions.append((first_h2_idx, trend))
+        # trend → 第一个 H2
+        if trend and h2_indices:
+            insertions.append((h2_indices[0], trend[0]))
+            used_h2.add(h2_indices[0])
 
-        if gap_imgs and gap_h2_idx is not None:
-            insertions.append((gap_h2_idx, gap_imgs))
+        # gap chart → gap 关键词 H2，兜底到倒数第二个 H2
+        if gap_chart:
+            anchor = gap_h2_idx
+            if anchor is None and len(h2_indices) >= 2:
+                anchor = h2_indices[-2]
+            elif anchor is None and h2_indices:
+                anchor = h2_indices[-1]
+            if anchor is not None:
+                insertions.append((anchor, gap_chart[0]))
+                used_h2.add(anchor)
 
-        # 从后往前排序，后面的先插入
+        # gap-ai → 下一个未被占用的 H2（与 gap chart 不同的位置）
+        if gap_ai:
+            available = [idx for idx in h2_indices if idx not in used_h2]
+            if available:
+                insertions.append((available[-1], gap_ai[0]))
+                used_h2.add(available[-1])
+            elif h2_indices:
+                # 所有 H2 都用了，放最后一个 H2
+                insertions.append((h2_indices[-1], gap_ai[0]))
+
+        # others → 均匀分散到剩余 H2
+        remaining_h2 = [idx for idx in h2_indices if idx not in used_h2]
+        for i, img_path in enumerate(others):
+            if remaining_h2:
+                anchor = remaining_h2[i % len(remaining_h2)]
+                insertions.append((anchor, img_path))
+            else:
+                self._append_image_at_end(img_path)
+
+        # 从后往前排序插入，避免索引偏移
         insertions.sort(key=lambda x: -x[0])
-
-        for para_idx, imgs in insertions:
-            self._insert_images_after_paragraph(paragraphs[para_idx], imgs)
-
-        # 兜底：未匹配的图片 append 到文末
-        for img_path in others:
-            self._append_image_at_end(img_path)
+        for para_idx, img_path in insertions:
+            self._insert_images_after_paragraph(paragraphs[para_idx], [img_path])
 
     def _insert_images_after_paragraph(self, anchor_para, image_paths: List[str]):
         """在指定段落之后插入图片（操作底层 XML）"""
