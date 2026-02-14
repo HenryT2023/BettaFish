@@ -281,6 +281,13 @@ def run_quill(date_str: Optional[str] = None, image_paths: Optional[List[str]] =
 
     logger.info(f">>> 文章生成完成: {len(article_md)} 字")
 
+    # 2.5 审稿 Agent：去 AI 味 rewrite
+    try:
+        from editor_agent import deai_rewrite
+        article_md = deai_rewrite(article_md)
+    except Exception as e:
+        logger.warning(f">>> Editor Agent 加载失败（使用原文继续）: {e}")
+
     # 3. 保存 Markdown 备份
     md_backup = PROJECT_ROOT / "pipeline" / "drafts" / f"{date_str}-article.md"
     md_backup.parent.mkdir(parents=True, exist_ok=True)
