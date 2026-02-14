@@ -206,10 +206,218 @@ def generate_gap_diagram(
         return None
 
 
+def plan_images(analysis: Dict) -> List[Dict]:
+    """
+    用 LLM 根据 Sage 分析决定需要生成哪些图片。
+    返回图片计划列表，每项包含 type 和 description。
+    失败时回退到默认的 cover + gap。
+    """
+    import sys
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from config import settings
+
+    selected = analysis.get("selected_topic", {})
+    topic = selected.get("topic", "")
+    outline = analysis.get("outline", "")
+    info_gap = analysis.get("info_gap_analysis", {})
+
+    # 默认回退计划
+    default_plan = [{"type": "cover", "description": topic}]
+    if info_gap:
+        default_plan.append({
+            "type": "gap",
+            "description": info_gap.get("gap_insight", topic),
+        })
+
+    api_key = settings.REPORT_ENGINE_API_KEY or settings.INSIGHT_ENGINE_API_KEY
+    base_url = settings.REPORT_ENGINE_BASE_URL or settings.INSIGHT_ENGINE_BASE_URL
+    model = settings.REPORT_ENGINE_MODEL_NAME or settings.INSIGHT_ENGINE_MODEL_NAME or "qwen-max"
+    if not api_key:
+        return default_plan
+
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    system_prompt = """你是一个图片编辑，负责为公众号文章规划配图。根据文章的话题和大纲，决定需要哪些类型的图片。
+
+可用图片类型：
+- cover: 封面图（必选，每篇文章都需要）
+- gap: 信息差对比图（文章涉及海外vs国内、信息不对称时使用）
+- process: 流程图/时间线（文章涉及步骤、发展阶段、操作指南时使用）
+- data: 数据可视化图（文章有关键数字对比、市场数据时使用）
+- comparison: 对比图（文章涉及产品/方案/平台 A vs B 对比时使用）
+
+规则：
+- 必须包含 cover
+- 总共2-3张图，不要超过3张
+- 根据文章内容选择最合适的类型，不要强凑
+- 每张图给出简短的中文描述（说明这张图应该展示什么）
+
+输出 JSON 数组，格式：
+[{"type": "cover", "description": "..."}, {"type": "data", "description": "..."}]
+只输出 JSON，不要其他内容。"""
+
+    context = f"话题：{topic}\n大纲：{str(outline)[:500]}"
+    if info_gap:
+        context += f"\n信息差：海外视角={info_gap.get('international_view', '')}，国内视角={info_gap.get('domestic_view', '')}"
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": context},
+            ],
+            temperature=0.3,
+            timeout=30,
+        )
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            raw = raw.rsplit("```", 1)[0]
+        plan = json.loads(raw)
+
+        # 校验：必须是 list，每项必须有 type 和 description
+        valid_types = {"cover", "gap", "process", "data", "comparison"}
+        validated = []
+        for item in plan:
+            if isinstance(item, dict) and item.get("type") in valid_types:
+                validated.append(item)
+        if not any(p["type"] == "cover" for p in validated):
+            validated.insert(0, {"type": "cover", "description": topic})
+
+        logger.info(f"图片计划: {[p['type'] for p in validated]}")
+        return validated[:3]
+
+    except Exception as e:
+        logger.warning(f"图片规划 LLM 失败（{e}），使用默认计划")
+        return default_plan
+
+
+def generate_contextual_image(
+    image_type: str,
+    topic: str,
+    description: str,
+    output_path: str,
+    info_gap: Optional[Dict] = None,
+    keywords: Optional[List[str]] = None,
+) -> Optional[str]:
+    """
+    根据图片类型生成对应的图片。
+    统一入口，内部根据 type 构建不同的 prompt。
+    """
+    from google.genai import types
+
+    client = _get_client()
+    if not client:
+        return None
+
+    palette = random.choice(_PALETTES)
+    composition = random.choice(_COMPOSITIONS)
+
+    if image_type == "cover":
+        kw_str = ", ".join((keywords or [topic])[:5])
+        metaphor = random.choice(_METAPHORS)
+        short_title = topic[:8] if len(topic) > 8 else topic
+        prompt = (
+            f"生成一张公众号封面图。"
+            f"主题：{topic}。关键词：{kw_str}。"
+            f"风格：商业科技杂志封面，扁平插画，{palette}。"
+            f"构图：{composition}。"
+            f"视觉元素：{metaphor}。"
+            f"图片正中央必须包含中文大标题「{short_title}」，白色粗体字，清晰可读。"
+            f"不要出现人脸。专业公众号封面风格。"
+        )
+    elif image_type == "gap":
+        gap = info_gap or {}
+        gap_composition = random.choice([
+            "维恩图交叉发光区域",
+            "双栏对比加桥梁箭头连接",
+            "天平秤两侧加权元素",
+            "双雷达图并排对比",
+            "冰山图展示可见层与隐藏层",
+        ])
+        prompt = (
+            f"生成一张信息差对比图。"
+            f"左侧标注「海外」：{gap.get('international_view', description)[:80]}。"
+            f"右侧标注「国内」：{gap.get('domestic_view', description)[:80]}。"
+            f"中间用箭头或桥梁表示信息差：{gap.get('gap_insight', description)[:80]}。"
+            f"构图：{gap_composition}。配色：{palette}。"
+            f"关键标签用中文。底部小字：东旺数贸。"
+            f"风格：深色背景，数据仪表盘风格，专业商业信息图。"
+            f"不要出现水印。"
+        )
+    elif image_type == "process":
+        prompt = (
+            f"生成一张流程图/时间线信息图。"
+            f"主题：{topic}。"
+            f"内容：{description[:120]}。"
+            f"风格：从左到右或从上到下的清晰流程箭头，每个步骤用图标和简短中文标签。"
+            f"配色：{palette}。"
+            f"底部小字：东旺数贸。"
+            f"深色背景，扁平设计，专业信息图风格。"
+            f"不要出现人脸或水印。"
+        )
+    elif image_type == "data":
+        prompt = (
+            f"生成一张数据可视化信息图。"
+            f"主题：{topic}。"
+            f"展示内容：{description[:120]}。"
+            f"风格：仪表盘式布局，包含柱状图/饼图/数字卡片等数据元素。"
+            f"关键数字用大号中文标注。"
+            f"配色：{palette}。"
+            f"底部小字：东旺数贸。"
+            f"深色背景，现代商业数据报告风格。"
+            f"不要出现人脸或水印。"
+        )
+    elif image_type == "comparison":
+        prompt = (
+            f"生成一张对比分析信息图。"
+            f"主题：{topic}。"
+            f"对比内容：{description[:120]}。"
+            f"风格：左右分栏对比，每侧用图标和中文标签列出要点，中间用VS或分隔线。"
+            f"配色：{palette}。"
+            f"底部小字：东旺数贸。"
+            f"深色背景，专业商业对比图风格。"
+            f"不要出现人脸或水印。"
+        )
+    else:
+        logger.warning(f"未知图片类型: {image_type}")
+        return None
+
+    try:
+        response = client.models.generate_content(
+            model=MODEL_COVER if image_type == "cover" else MODEL_DIAGRAM,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                image_config=types.ImageConfig(
+                    aspect_ratio="16:9",
+                ),
+            ),
+        )
+
+        for part in response.parts:
+            if part.inline_data:
+                image = part.as_image()
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                image.save(output_path)
+                logger.info(f"{image_type} 图已保存: {output_path}")
+                return output_path
+
+        logger.warning(f"Nano Banana 未返回 {image_type} 图")
+        return None
+
+    except Exception as e:
+        logger.warning(f"{image_type} 图生成失败: {e}")
+        return None
+
+
 def run_image_gen(date_str: Optional[str] = None) -> List[str]:
     """
-    为当天文章生成所有 Nano Banana 图片。
-    读取 Sage 分析 JSON，生成封面图 + 信息差关系图。
+    为当天文章动态生成图片。
+    先用 LLM 规划需要哪些图片类型，再逐张生成。
     返回生成的图片路径列表。
     """
     if date_str is None:
@@ -243,23 +451,32 @@ def run_image_gen(date_str: Optional[str] = None) -> List[str]:
     if not keywords:
         keywords = [topic]
 
-    # 1. 封面图
-    logger.info(f">>> 生成封面图: {topic}")
-    cover_path = str(chart_dir / f"{date_str}-cover.png")
-    result = generate_cover_image(topic, keywords, cover_path)
-    if result:
-        images.append(result)
+    # LLM 动态规划图片类型
+    image_plan = plan_images(analysis)
+    logger.info(f">>> 图片计划: {[p['type'] for p in image_plan]}")
 
-    # 2. 信息差关系图
-    if info_gap:
-        logger.info(f">>> 生成信息差关系图")
-        gap_path = str(chart_dir / f"{date_str}-gap-ai.png")
-        result = generate_gap_diagram(
+    # 逐张生成
+    type_suffix = {
+        "cover": "cover",
+        "gap": "gap-ai",
+        "process": "process",
+        "data": "data-viz",
+        "comparison": "comparison",
+    }
+    for plan_item in image_plan:
+        img_type = plan_item["type"]
+        desc = plan_item.get("description", topic)
+        suffix = type_suffix.get(img_type, img_type)
+        output_path = str(chart_dir / f"{date_str}-{suffix}.png")
+
+        logger.info(f">>> 生成 {img_type} 图: {desc[:50]}")
+        result = generate_contextual_image(
+            image_type=img_type,
             topic=topic,
-            international_view=info_gap.get("international_view", ""),
-            domestic_view=info_gap.get("domestic_view", ""),
-            gap_insight=info_gap.get("gap_insight", ""),
-            output_path=gap_path,
+            description=desc,
+            output_path=output_path,
+            info_gap=info_gap if img_type == "gap" else None,
+            keywords=keywords if img_type == "cover" else None,
         )
         if result:
             images.append(result)
