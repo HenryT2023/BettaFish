@@ -268,34 +268,40 @@ def run_observer(date_str: Optional[str] = None) -> Optional[str]:
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(audit, f, ensure_ascii=False, indent=2)
 
-    # 6. Telegram 报告
-    status_emoji = "✅" if all_ok else "⚠️"
-    quality_emoji = "✅" if quality.get("quality_ok") else "❌"
-
-    # 可卖性评分提取
-    sellability = quality.get("quality_detail", {}).get("sellability", 0)
-    monetization_hint = quality.get("quality_detail", {}).get("monetization_hint", "")
-    sell_emoji = "💰" if sellability >= 7 else "💸" if sellability >= 5 else "⚪"
+    # 6. Telegram 报告（精简版：只列搜索标题，不给建议）
+    status_tag = "OK" if all_ok else "WARN"
 
     report_text = (
-        f"{status_emoji} <b>Observer 每日审计 — {date_str}</b>\n\n"
-        f"📡 Scout: {scout['scout_files']} 批 / {scout['scout_items']} 条\n"
-        f"🧠 Sage: {'✅ ' + sage['sage_topic'] if sage['sage_ok'] else '❌ 无输出'}\n"
-        f"✍️ Quill: {'✅ ' + str(quill['quill_docx_size']) + ' bytes' if quill['quill_ok'] else '❌ 无输出'}\n"
-        f"🔒 Premium: {'✅ ' + str(quill.get('premium_words', 0)) + ' 字' if quill.get('premium_exists') else '❌ 无产出'}\n"
-        f"{quality_emoji} 质量: {quality.get('quality_score', '?')}/10\n"
-        f"{sell_emoji} 可卖性: {sellability}/10\n"
-        f"📊 State: {state_check['state_url_count']} URLs / {state_check['state_publish_count']} published today\n"
+        f"<b>Observer {date_str} [{status_tag}]</b>\n\n"
+        f"Scout: {scout['scout_files']}批 / {scout['scout_items']}条\n"
+        f"Sage: {sage['sage_topic'] if sage['sage_ok'] else '无输出'}\n"
+        f"Quill: {str(quill['quill_docx_size']) + 'B' if quill['quill_ok'] else '无输出'}\n"
+        f"质量: {quality.get('quality_score', '?')}/10\n"
     )
 
-    if monetization_hint:
-        report_text += f"\n💡 变现建议: {monetization_hint}\n"
+    # 列出当天 Scout 搜索到的标题
+    scout_dir = PROJECT_ROOT / "pipeline" / "scout"
+    scout_titles = []
+    for fp in sorted(glob.glob(str(scout_dir / f"{date_str}-*.json"))):
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for item in data.get("items", []):
+                t = item.get("title", "").strip()
+                if t and t not in scout_titles:
+                    scout_titles.append(t)
+        except Exception:
+            pass
+
+    if scout_titles:
+        report_text += f"\n<b>今日搜索标题 ({len(scout_titles)}条)</b>\n"
+        for t in scout_titles[:20]:
+            report_text += f"- {t}\n"
+        if len(scout_titles) > 20:
+            report_text += f"... 还有 {len(scout_titles) - 20} 条\n"
 
     if state_check["state_issues"]:
-        report_text += f"\n⚠️ State 问题: {'; '.join(state_check['state_issues'])}\n"
-
-    if quality.get("quality_reason"):
-        report_text += f"\n💡 建议: {quality['quality_reason']}\n"
+        report_text += f"\nState问题: {'; '.join(state_check['state_issues'])}\n"
 
     send_message(report_text)
     logger.info(f"=== Observer 完成 | {output_file} ===")
